@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: ${{ matrix.workspace }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          - '@fiapx/shared'
+          - '@fiapx/video-api'
+          - '@fiapx/video-processor'
+          - '@fiapx/notification-service'
+          - '@fiapx/web'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Every workspace imports @fiapx/shared from its built output.
+      - run: npm run build -w @fiapx/shared
+
+      - name: Lint
+        run: npx eslint . --ext .ts,.tsx
+
+      - name: Typecheck
+        run: npm run typecheck -w ${{ matrix.workspace }}
+
+      - name: Unit tests
+        run: npm run test:unit -w ${{ matrix.workspace }} -- --coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ strategy.job-index }}
+          path: '**/coverage/lcov.info'
+          if-no-files-found: ignore
+          retention-days: 3
+
+  integration:
+    name: integration + bdd
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build -w @fiapx/shared
+
+      # Testcontainers uses the Docker daemon that ubuntu-latest already provides.
+      - name: Integration tests
+        run: npm run test:integration -w @fiapx/video-api
+
+      - name: BDD scenarios
+        run: npm run test:bdd -w @fiapx/video-api
+
+  images:
+    name: build images
+    runs-on: ubuntu-latest
+    needs: [quality]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: video-api
+            dockerfile: apps/video-api/Dockerfile
+          - app: video-processor
+            dockerfile: apps/video-processor/Dockerfile
+          - app: notification
+            dockerfile: apps/notification-service/Dockerfile
+          - app: web
+            dockerfile: apps/web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.app }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: fiapx/${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  sonar:
+    name: sonarcloud
+    runs-on: ubuntu-latest
+    needs: [quality]
+    # Skipped automatically on forks, where the token is not available.
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: SonarCloud scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        continue-on-error: true

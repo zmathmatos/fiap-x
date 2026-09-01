@@ -161,8 +161,11 @@ interface EventEnvelope<T> {
 |---|---|---|---|
 | `video.uploaded` | video-api | video-processor | `videoId, userId, storageKey, originalName, frameIntervalSeconds` |
 | `video.processing.started` | video-processor | video-api | `videoId` |
-| `video.processed` | video-processor | video-api, notification | `videoId, zipKey, frameCount, durationMs, sizeBytes` |
-| `video.failed` | video-processor | video-api, notification | `videoId, reason, attempt` |
+| `video.processed` | video-processor | video-api, notification | `videoId, userEmail, originalName, zipKey, frameCount, durationMs, sizeBytes` |
+| `video.failed` | video-processor | video-api, notification | `videoId, userEmail, originalName, reason, attempt` |
+
+`userEmail` e `originalName` viajam nos payloads de resultado para que o `notification-service`
+monte o e-mail sem acessar banco algum.
 
 Máquina de estados: `PENDING → PROCESSING → COMPLETED | FAILED`. Transições inválidas são
 ignoradas e registradas em log — protege contra eventos fora de ordem.

@@ -94,8 +94,12 @@ export class VideoController {
       });
 
       pending.catch(() => {
-        // Settled in the `close` handler; this only prevents an unhandled rejection
-        // while busboy is still draining the request.
+        // The use case can reject before it ever reads the stream — an unsupported
+        // extension is rejected on the first line. Nobody would consume the bytes
+        // then, busboy would never emit `close`, and the request would hang until
+        // the client gave up. Draining here lets the parser finish so the error
+        // handler can answer.
+        stream.resume();
       });
     });
 

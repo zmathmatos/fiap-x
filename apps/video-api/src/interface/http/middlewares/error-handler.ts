@@ -18,6 +18,31 @@ export function createErrorHandler(logger: Logger): ErrorRequestHandler {
       return;
     }
 
+    // Express middleware (body-parser and friends) throws http-errors: those
+    // already carry the right status and a message meant for the client. Without
+    // this, malformed JSON would answer 500 and pollute the logs with a false
+    // "unhandled error".
+    const httpError = error as { statusCode?: unknown; expose?: unknown; message?: unknown };
+    if (
+      typeof httpError.statusCode === 'number' &&
+      httpError.statusCode >= 400 &&
+      httpError.statusCode < 500 &&
+      httpError.expose === true
+    ) {
+      logger.info(
+        { status: httpError.statusCode, path: req.path, correlationId: req.correlationId },
+        'malformed request',
+      );
+      res.status(httpError.statusCode).json({
+        error: {
+          code: 'BAD_REQUEST',
+          message:
+            typeof httpError.message === 'string' ? httpError.message : 'Requisição inválida.',
+        },
+      });
+      return;
+    }
+
     logger.error(
       { err: error, path: req.path, correlationId: req.correlationId },
       'unhandled error',

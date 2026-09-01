@@ -1,0 +1,118 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: video-api-migrate
+  namespace: fiapx
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      name: video-api-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/zmathmatos/fiapx-video-api:latest
+          envFrom:
+            - configMapRef:
+                name: fiapx-config
+            - secretRef:
+                name: fiapx-secrets
+          command:
+            - node
+            - -e
+            - >-
+              const{createDataSource}=require('/app/apps/video-api/dist/infrastructure/database/data-source');
+              const{loadConfig}=require('/app/apps/video-api/dist/config');
+              const ds=createDataSource(loadConfig().database);
+              ds.initialize().then(()=>ds.runMigrations()).then(m=>{console.log('migrations aplicadas:',m.length);return ds.destroy()}).then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-api
+  namespace: fiapx
+  labels:
+    app: video-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: video-api
+  template:
+    metadata:
+      labels:
+        app: video-api
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '3000'
+        prometheus.io/path: /metrics
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: video-api
+          image: ghcr.io/zmathmatos/fiapx-video-api:latest
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: fiapx-config
+            - secretRef:
+                name: fiapx-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: video-api
+  namespace: fiapx
+spec:
+  type: ClusterIP
+  selector:
+    app: video-api
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: video-api
+  namespace: fiapx
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: video-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

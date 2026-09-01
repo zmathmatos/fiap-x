@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-processor
+  namespace: fiapx
+  labels:
+    app: video-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: video-processor
+  template:
+    metadata:
+      labels:
+        app: video-processor
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9100'
+        prometheus.io/path: /metrics
+    spec:
+      # Um vídeo grande pode levar minutos. O pod para de consumir ao receber
+      # SIGTERM e só então termina o que já estava em andamento.
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: video-processor
+          image: ghcr.io/zmathmatos/fiapx-video-processor:latest
+          ports:
+            - name: health
+              containerPort: 9100
+          envFrom:
+            - configMapRef:
+                name: fiapx-config
+            - secretRef:
+                name: fiapx-secrets
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: '2'
+              memory: 2Gi
+          livenessProbe:
+            httpGet: { path: /health, port: health }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /health/ready, port: health }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: scratch
+              mountPath: /tmp
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
+      volumes:
+        # ffmpeg precisa de disco temporário; o resto do filesystem é read-only.
+        - name: scratch
+          emptyDir:
+            sizeLimit: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: video-processor
+  namespace: fiapx
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: video-processor
+  ports:
+    - name: health
+      port: 9100
+      targetPort: health
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: video-processor
+  namespace: fiapx
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: video-processor
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+    scaleDown:
+      # Espera antes de reduzir: encerrar um worker no meio de um vídeo custa
+      # mais do que manter a réplica um pouco a mais.
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: video-processor
+  namespace: fiapx
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: video-processor

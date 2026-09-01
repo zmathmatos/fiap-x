@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: fiapx
+
+resources:
+  - base.yaml
+  - video-api.yaml
+  - video-processor.yaml
+  - notification-web.yaml
+
+# O Secret real é criado fora do repositório; secret.example.yaml documenta as
+# chaves esperadas e por isso não entra nos resources.
+
+commonLabels:
+  app.kubernetes.io/part-of: fiapx

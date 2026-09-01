@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fiapx
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-config
+  namespace: fiapx
+data:
+  NODE_ENV: production
+  LOG_LEVEL: info
+  API_PORT: '3000'
+  JWT_EXPIRES_IN: 8h
+  MAX_UPLOAD_BYTES: '524288000'
+  FRAME_INTERVAL_SECONDS: '20'
+  PROCESSOR_PREFETCH: '1'
+  PROCESSOR_HEALTH_PORT: '9100'
+  NOTIFICATION_HEALTH_PORT: '9101'
+  DB_HOST: postgres
+  DB_PORT: '5432'
+  DB_NAME: fiapx
+  DB_SCHEMA: video
+  REDIS_URL: redis://redis:6379
+  RABBITMQ_EXCHANGE: video-events
+  STORAGE_ENDPOINT: http://minio:9000
+  STORAGE_REGION: us-east-1
+  STORAGE_BUCKET_RAW: fiapx-raw
+  STORAGE_BUCKET_ZIPS: fiapx-zips
+  STORAGE_FORCE_PATH_STYLE: 'true'
+  SMTP_HOST: mailhog
+  SMTP_PORT: '1025'
+  SMTP_SECURE: 'false'
+  SMTP_FROM: FIAP X <no-reply@fiapx.local>
+  APP_PUBLIC_URL: http://fiapx.local
+  CORS_ORIGIN: http://fiapx.local

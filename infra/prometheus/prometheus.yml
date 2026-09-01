@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: video-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['video-api:3000']
+
+  - job_name: video-processor
+    metrics_path: /metrics
+    # DNS do Compose devolve todas as réplicas do serviço, então cada worker é
+    # descoberto sem configuração extra.
+    dns_sd_configs:
+      - names: ['video-processor']
+        type: A
+        port: 9100
+        refresh_interval: 15s
+
+  - job_name: notification
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['notification:9101']
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

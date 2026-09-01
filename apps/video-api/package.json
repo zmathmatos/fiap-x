@@ -12,8 +12,8 @@
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration --runInBand",
     "test:bdd": "cucumber-js",
-    "migration:run": "typeorm-ts-node-commonjs migration:run -d src/infrastructure/database/data-source.ts",
-    "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/infrastructure/database/data-source.ts"
+    "migration:run": "typeorm-ts-node-commonjs migration:run -d src/infrastructure/database/cli-data-source.ts",
+    "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/infrastructure/database/cli-data-source.ts"
   },
   "dependencies": {
     "@fiapx/shared": "*",
@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@cucumber/cucumber": "^11.1.0",
+    "@testcontainers/postgresql": "^12.1.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/busboy": "^1.5.4",
     "@types/cors": "^2.8.17",

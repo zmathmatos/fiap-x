@@ -14,7 +14,7 @@
   "dependencies": {
     "@fiapx/shared": "*",
     "express": "^5.1.0",
-    "ioredis": "^5.4.2",
+    "ioredis": "^6.0.0",
     "nodemailer": "^6.9.16",
     "prom-client": "^15.1.3"
   },

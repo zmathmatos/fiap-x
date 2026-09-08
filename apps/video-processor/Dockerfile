@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json tsconfig.base.json ./
@@ -12,7 +12,7 @@ COPY packages/shared packages/shared
 COPY apps/video-processor apps/video-processor
 RUN npm run build -w @fiapx/shared && npm run build -w @fiapx/video-processor
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 

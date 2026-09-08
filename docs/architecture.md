@@ -44,11 +44,11 @@ flowchart TB
 
 Cada serviço tem uma responsabilidade única e um dono claro de dados:
 
-| Serviço | Dono de | Estado |
-|---|---|---|
-| `video-api` | PostgreSQL (schema `video`) | com estado |
-| `video-processor` | nada | **sem estado** — por isso escala livremente |
-| `notification-service` | nada | sem estado |
+| Serviço                | Dono de                     | Estado                                      |
+| ---------------------- | --------------------------- | ------------------------------------------- |
+| `video-api`            | PostgreSQL (schema `video`) | com estado                                  |
+| `video-processor`      | nada                        | **sem estado** — por isso escala livremente |
+| `notification-service` | nada                        | sem estado                                  |
 
 Nenhum serviço lê o banco de outro. A comunicação é exclusivamente por eventos, no padrão saga
 coreografada: não existe orquestrador central.
@@ -154,13 +154,13 @@ timeline da tela de detalhe.
 
 ## 7. Escala
 
-| Componente | Estratégia |
-|---|---|
-| `video-api` | HPA 2→6 réplicas por CPU (70%). Sem estado em memória; a sessão é o JWT |
-| `video-processor` | HPA 2→10 réplicas por CPU (65%). `prefetch=1`, então cada réplica é uma unidade de trabalho |
-| `notification-service` | 1 réplica basta: envio de e-mail é I/O barato |
-| `web` | 2 réplicas de nginx atrás do Service |
-| PostgreSQL | instância única com schema isolado por serviço, como na fase anterior |
+| Componente             | Estratégia                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `video-api`            | HPA 2→6 réplicas por CPU (70%). Sem estado em memória; a sessão é o JWT                     |
+| `video-processor`      | HPA 2→10 réplicas por CPU (65%). `prefetch=1`, então cada réplica é uma unidade de trabalho |
+| `notification-service` | 1 réplica basta: envio de e-mail é I/O barato                                               |
+| `web`                  | 2 réplicas de nginx atrás do Service                                                        |
+| PostgreSQL             | instância única com schema isolado por serviço, como na fase anterior                       |
 
 Como evolução, a documentação de operação registra a troca do HPA por CPU pelo KEDA, escalando o
 worker pela profundidade da fila — métrica que corresponde melhor ao trabalho pendente.
@@ -191,3 +191,64 @@ worker pela profundidade da fila — métrica que corresponde melhor ao trabalho
 - `/health` (liveness) não toca em dependência alguma; `/health/ready` verifica Postgres, RabbitMQ,
   storage e Redis. São probes distintas justamente para que uma dependência lenta não faça o
   Kubernetes matar um processo saudável.
+
+## 10. Camadas internas de cada serviço
+
+Os três serviços de backend seguem a mesma divisão em quatro camadas. A regra de dependência aponta
+sempre para dentro: uma seta nunca sai do centro.
+
+```mermaid
+flowchart LR
+  interface["interface<br/>controllers, middlewares, health server"]
+  infrastructure["infrastructure<br/>TypeORM, ffmpeg, S3, Redis, SMTP, Prometheus"]
+  application["application<br/>casos de uso, presenters, router"]
+  domain["domain<br/>entidades, value objects, portas"]
+
+  interface --> application
+  infrastructure --> application
+  application --> domain
+  interface --> domain
+  infrastructure --> domain
+```
+
+`domain` não importa nada de fora — nem do próprio serviço, nem de biblioteca de infraestrutura.
+`application` conhece apenas `domain` e as portas que ele declara. Quem instancia adaptador concreto
+é só o `container.ts` de cada serviço, o único ponto do código que sabe que o Postgres é Postgres.
+
+A regra é verificada pelo ESLint (`no-restricted-imports` por camada em `.eslintrc.json`), então uma
+violação quebra o CI em vez de ficar como convenção escrita.
+
+### Domain — o que é regra de negócio
+
+| Elemento        | Onde        | Invariante que protege                                                                |
+| --------------- | ----------- | ------------------------------------------------------------------------------------- |
+| `Video`         | `video-api` | Toda mudança de status passa pela máquina de estados; estado terminal não aceita nada |
+| `VideoStatus`   | `video-api` | Transições permitidas declaradas em um único mapa                                     |
+| `VideoTitle`    | `video-api` | Nome vazio é ausência de nome; limite de 200 caracteres                               |
+| `FrameInterval` | `video-api` | Inteiro entre 1 e 3600 segundos                                                       |
+| `VideoFormat`   | `video-api` | Somente containers que o ffmpeg do worker processa                                    |
+| `User`          | `video-api` | `toPublic()` nunca expõe o hash da senha                                              |
+
+### Portas — o que cada camada exige de fora
+
+| Porta                                                                  | Serviço                | Implementação                |
+| ---------------------------------------------------------------------- | ---------------------- | ---------------------------- |
+| `VideoRepository`, `UserRepository`                                    | `video-api`            | TypeORM sobre Postgres       |
+| `PasswordHasher`, `TokenService`                                       | `video-api`            | bcrypt, jsonwebtoken         |
+| `MetricsExporter`, `VideoMetrics`                                      | `video-api`            | `prom-client`                |
+| `FrameExtractor`, `ZipArchiver`                                        | `video-processor`      | ffmpeg/ffprobe, archiver     |
+| `WorkspaceFactory`                                                     | `video-processor`      | diretório temporário por job |
+| `ProcessingMetrics`                                                    | `video-processor`      | `prom-client`                |
+| `Mailer`, `NotificationMetrics`                                        | `notification-service` | Nodemailer, `prom-client`    |
+| `ObjectStorage`, `IdempotencyStore`, `ProgressStore`, `EventPublisher` | `packages/shared`      | S3/MinIO, Redis, RabbitMQ    |
+
+### SOLID na prática
+
+- **SRP** — `ProcessVideoUseCase` orquestra; baixar, extrair, arquivar e publicar são métodos
+  distintos. O controller HTTP não faz parsing de multipart: isso é `multipart-upload.ts`.
+- **OCP** — uma nova notificação é um `NotificationHandler` a mais registrado no
+  `NotificationRouter`, sem tocar em nenhum handler existente.
+- **LSP** — `withProgressFallback` decora um `ProgressStore` e continua sendo um `ProgressStore`.
+- **ISP** — as portas descrevem o mínimo que o consumidor usa: `MetricsExporter` tem `contentType` e
+  `render()`, não o registry inteiro do Prometheus.
+- **DIP** — casos de uso recebem portas pelo construtor; nenhum deles importa um adaptador.

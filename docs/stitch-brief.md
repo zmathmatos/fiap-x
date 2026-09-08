@@ -3,6 +3,11 @@
 Documento para gerar as telas no Google Stitch. Cada seção tem um **prompt pronto para colar**.
 Comece pelo Design System, depois gere uma tela por vez, na ordem apresentada.
 
+> **Estado atual:** as telas já foram geradas e o resultado do Stitch é o que está implementado em
+> `apps/web`. O Stitch devolveu uma paleta Material 3 no lugar do monocromático descrito
+> originalmente aqui, e essa foi a versão adotada. A seção "Design system" abaixo reflete o que
+> está no código; os prompts das seções 3 a 6 são o histórico de como as telas foram geradas.
+
 ---
 
 ## 1. O produto
@@ -22,29 +27,48 @@ tipografia pequena e muito alinhamento. Quem usa isso passa o dia olhando uma ta
 
 ### Paleta
 
-Somente preto, branco, cinza e vermelho. O vermelho é **exclusivo** de ação primária e de erro —
-nunca decorativo, nunca em fundo de área grande.
+Esquema Material 3 com o magenta institucional da FIAP como cor primária e um teal como
+terciária. Os tokens vivem em `apps/web/src/styles/tokens.css` como canais RGB, e o Tailwind os
+compõe via `rgb(var(--token) / <alpha-value>)` — é isso que faz `bg-primary/10` funcionar sobre
+variáveis.
 
-| Token | Hex | Uso |
-|---|---|---|
-| `black` | `#0B0B0C` | Texto principal; fundo do tema escuro |
-| `gray-900` | `#161618` | Superfície elevada no tema escuro |
-| `gray-800` | `#232326` | Borda no tema escuro |
-| `gray-600` | `#5A5A60` | Texto secundário |
-| `gray-400` | `#9A9AA0` | Texto auxiliar, rótulos, placeholders |
-| `gray-200` | `#E3E3E5` | Bordas e divisórias no tema claro |
-| `gray-100` | `#F2F2F3` | Cabeçalho de tabela, superfície rebaixada |
-| `gray-50` | `#FAFAFA` | Fundo da aplicação no tema claro |
-| `white` | `#FFFFFF` | Superfície de cartões e tabelas |
-| `red-600` | `#C40027` | Hover do botão primário |
-| `red-500` | `#EF0D33` | **Cor de ação**: botão primário, link ativo, foco, estado de erro |
-| `red-100` | `#FDE7EC` | Fundo de alerta de erro e do selo "Falhou" |
+O acento tem dois passos por causa de contraste: `#ed145b` atrás de texto branco mede 4,33:1,
+abaixo dos 4,5:1 que o AA pede para 13px, enquanto `#c10e4a` mede 6,12:1. Por isso `primary` (fundo
+de botão) é o tom escuro e `primary-container` é o magenta exato da marca — que é onde ele aparece
+descoberto: logo, hover e anel de foco.
 
-> Para usar o magenta institucional da FIAP no lugar do vermelho, troque `red-500` por `#ED145B`
-> e `red-600` por `#C10E4A`. Todo o resto permanece igual.
+| Token                      | Claro     | Escuro    | Uso                                 |
+| -------------------------- | --------- | --------- | ----------------------------------- |
+| `primary`                  | `#c10e4a` | `#c10e4a` | Fundo do botão primário, link ativo |
+| `primary-container`        | `#ed145b` | `#ed145b` | Magenta FIAP: logo, hover, foco     |
+| `on-primary`               | `#ffffff` | `#ffffff` | Texto sobre o vermelho              |
+| `tertiary`                 | `#006577` | `#74d4ed` | Ação secundária, link "Acompanhar"  |
+| `tertiary-container`       | `#008096` | `#008096` | Selo e barra de "Processando"       |
+| `success`                  | `#10b981` | `#34d399` | Selo "Concluído"                    |
+| `error`                    | `#ba1a1a` | `#ffb4ab` | Selo "Falhou", erro de campo        |
+| `error-container`          | `#ffdad6` | `#93000a` | Fundo de alerta                     |
+| `surface` / `background`   | `#faf8ff` | `#131316` | Fundo da aplicação                  |
+| `surface-container-lowest` | `#ffffff` | `#0e0e11` | Cartões, tabelas, painéis           |
+| `surface-container-low`    | `#f5f2fa` | `#1b1b1f` | Sidebar, cabeçalho de fila          |
+| `surface-variant`          | `#e3e1e9` | `#48454e` | Canvas atrás do conteúdo            |
+| `on-surface`               | `#1b1b20` | `#e5e1e9` | Texto principal                     |
+| `secondary`                | `#5f5e60` | `#c8c6c8` | Texto secundário                    |
+| `secondary-container`      | `#e2dfe1` | `#46464a` | Bordas e divisórias                 |
+| `outline-variant`          | `#e8bcba` | `#48454e` | Borda de campo                      |
 
-**Regra de proporção:** aproximadamente 90% neutros, 10% vermelho. Numa tela típica o vermelho
-aparece só no botão primário e nos itens com falha.
+O magenta continua reservado para ação primária — nunca decorativo, nunca em fundo de área grande.
+O teal aparece só em estado de processamento e em ação secundária.
+
+### Logo
+
+O componente `apps/web/src/components/Logo.tsx` traz os paths oficiais do wordmark, copiados sem
+alteração de `https://www.fiap.com.br/svg/fiap.svg`. O **X** não é fonte substituta: foi desenhado
+sobre a geometria medida no próprio arquivo — 34,79° da vertical (o mesmo ângulo da diagonal do
+**A**) e traço de 2,876 de largura horizontal, na altura de maiúsculas que o F, o I e o P dividem
+(0,205 a 27,506).
+
+Tudo em `currentColor`, então um componente serve tema claro, tema escuro e o rail de ícones. A
+variante `mark` mostra só o X, para os 64px do rail.
 
 ### Tipografia
 
@@ -57,25 +81,23 @@ aparece só no botão primário e nos itens com falha.
 
 ### Forma e espaçamento
 
-- Grade de espaçamento de 4px: 4, 8, 12, 16, 24, 32, 48.
-- Raio: **4px** em campos e botões, **6px** em selos, **10px** em cartões e painéis. Nada mais
-  arredondado que isso.
-- Bordas de **1px sólida** em `gray-200`. Sombras quase imperceptíveis
+- Grade de espaçamento de 4px, nomeada: `xs` 4, `sm` 8, `md`/`gutter` 16, `lg` 24, `xl` 32.
+- Raio: `lg` 0.25rem, `xl` 0.5rem em painéis, `full` 0.75rem em campos e botões, `4xl` 2rem em
+  itens de navegação e no dropzone, `circle` para pontos e avatares.
+- Bordas de 1px em `secondary-container`. Sombras quase imperceptíveis
   (`0 1px 2px rgba(0,0,0,0.05)`) e apenas em elementos flutuantes.
-- Altura de linha de tabela: 44px. Densidade alta é intencional.
+- Altura de linha de tabela: 44px (`row-height`). Densidade alta é intencional.
 
 ### Proibido
 
-Gradientes de qualquer tipo · emoji · ilustrações · ícones grandes decorativos · cartão único
-centralizado com ícone no topo · texto de marketing · cantos muito arredondados · sombras difusas
-coloridas · mais de uma cor de destaque · fundo vermelho em área grande.
+Gradientes de qualquer tipo · emoji · ilustrações · texto de marketing · sombras difusas coloridas
+· fundo vermelho em área grande · uma terceira cor de destaque além do vermelho e do teal.
 
 ### Tema
 
-Claro e escuro. No escuro: fundo `black`, superfícies `gray-900`, bordas `gray-800`, texto `white`
-e `gray-400`. O vermelho continua o mesmo em ambos.
-
----
+Claro e escuro, alternados pelo atributo `data-theme` no `<html>`. O `ThemeToggle` sempre escreve
+um valor explícito — inclusive no modo automático, resolvendo `prefers-color-scheme` na hora —
+porque a variante `dark:` do Tailwind está ligada a `[data-theme="dark"]`.
 
 ### Prompt — Design System
 
@@ -174,15 +196,15 @@ usuário em duas linhas (13px e 11px), e dois botões fantasma pequenos, "Tema: 
 
 **Tabela** dentro de um painel branco com borda 1px e raio 10px. Cabeçalho `gray-100`. Colunas:
 
-| Coluna | Alinhamento | Exemplo |
-|---|---|---|
-| Arquivo | esquerda, 500 | `aula-02-introducao.mp4` |
-| Status | esquerda | selo |
-| Duração | direita, tabular | `12:04` |
-| Frames | direita, tabular | `1.284` |
-| Zip | direita, tabular | `48,2 MB` |
-| Enviado | esquerda, `gray-400` | `há 3 minutos` |
-| (ação) | direita | botão |
+| Coluna  | Alinhamento          | Exemplo                  |
+| ------- | -------------------- | ------------------------ |
+| Arquivo | esquerda, 500        | `aula-02-introducao.mp4` |
+| Status  | esquerda             | selo                     |
+| Duração | direita, tabular     | `12:04`                  |
+| Frames  | direita, tabular     | `1.284`                  |
+| Zip     | direita, tabular     | `48,2 MB`                |
+| Enviado | esquerda, `gray-400` | `há 3 minutos`           |
+| (ação)  | direita              | botão                    |
 
 **Selos de status** — cápsula pequena com ponto de 6px à esquerda, borda 1px:
 
@@ -317,8 +339,8 @@ contêiner com borda e raio 10px. Cada bloco tem um rótulo de 11px maiúsculo `
 de 17px com numerais tabulares:
 
 | Duração | Frames | Tamanho do zip | Intervalo |
-|---|---|---|---|
-| 12:04 | 1.284 | 48,2 MB | 20s |
+| ------- | ------ | -------------- | --------- |
+| 12:04   | 1.284  | 48,2 MB        | 20s       |
 
 **Linha do tempo:** título de seção "Linha do tempo" em 13px semibold `gray-600`, seguido de uma
 lista vertical com uma linha guia de 1px à esquerda. Cada evento é um ponto de 9px sobre a linha,

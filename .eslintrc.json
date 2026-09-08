@@ -18,14 +18,66 @@
     "@typescript-eslint/no-explicit-any": "error",
     "@typescript-eslint/no-unused-vars": [
       "error",
-      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
     ],
     "@typescript-eslint/explicit-function-return-type": [
       "warn",
-      { "allowExpressions": true, "allowTypedFunctionExpressions": true }
+      {
+        "allowExpressions": true,
+        "allowTypedFunctionExpressions": true
+      }
     ]
   },
   "overrides": [
+    {
+      "files": ["apps/*/src/domain/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/application/**",
+                  "**/infrastructure/**",
+                  "**/interface/**",
+                  "../application/*",
+                  "../infrastructure/*",
+                  "../interface/*"
+                ],
+                "message": "Regra de dependência: domain não conhece nenhuma camada externa."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/*/src/application/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/infrastructure/**",
+                  "**/interface/**",
+                  "../infrastructure/*",
+                  "../../infrastructure/*",
+                  "../interface/*",
+                  "../../interface/*"
+                ],
+                "message": "Regra de dependência: application depende de domain e de portas, nunca de adaptadores."
+              }
+            ]
+          }
+        ]
+      }
+    },
     {
       "files": ["**/tests/**/*.ts", "**/tests/**/*.tsx", "**/features/**/*.ts"],
       "rules": {
@@ -35,7 +87,9 @@
     },
     {
       "files": ["apps/web/**/*.tsx", "apps/web/**/*.ts"],
-      "env": { "browser": true }
+      "env": {
+        "browser": true
+      }
     }
   ]
 }

@@ -19,15 +19,15 @@ cp env.example .env      # opcional: o compose já traz valores de desenvolvimen
 make up                  # sobe tudo (o primeiro build leva alguns minutos)
 ```
 
-| Serviço | Endereço | Acesso |
-|---|---|---|
-| Aplicação | http://localhost:8080 | crie uma conta na tela inicial |
-| API | http://localhost:3000 | — |
-| Caixa de e-mail (MailHog) | http://localhost:8025 | — |
-| RabbitMQ | http://localhost:15672 | `fiapx` / `fiapx` |
-| MinIO | http://localhost:9001 | `fiapx` / `fiapx-secret` |
-| Grafana | http://localhost:3001 | acesso anônimo liberado |
-| Prometheus | http://localhost:9090 | — |
+| Serviço                   | Endereço               | Acesso                         |
+| ------------------------- | ---------------------- | ------------------------------ |
+| Aplicação                 | http://localhost:8080  | crie uma conta na tela inicial |
+| API                       | http://localhost:3000  | —                              |
+| Caixa de e-mail (MailHog) | http://localhost:8025  | —                              |
+| RabbitMQ                  | http://localhost:15672 | `fiapx` / `fiapx`              |
+| MinIO                     | http://localhost:9001  | `fiapx` / `fiapx-secret`       |
+| Grafana                   | http://localhost:3001  | acesso anônimo liberado        |
+| Prometheus                | http://localhost:9090  | —                              |
 
 Outros comandos:
 
@@ -73,29 +73,29 @@ registradas em [`docs/adr/`](docs/adr).
 
 ### Por que não perde requisição em pico
 
-| Mecanismo | Efeito |
-|---|---|
-| Exchange e filas `durable`, mensagens persistentes | Sobrevivem ao restart do broker |
-| Publisher confirms | O upload só é aceito depois que o broker confirmou o evento |
-| `prefetch=1` e ack manual após o zip subir | Um worker que morre no meio devolve a mensagem |
-| Retry com backoff (30s, 2min, 10min) e DLQ | Falha transitória não vira falha definitiva |
-| Idempotência por `eventId` no Redis | Redelivery não gera zip nem e-mail duplicado |
-| HPA de 2 a 10 réplicas do worker | A fila drena mais rápido conforme a carga sobe |
+| Mecanismo                                          | Efeito                                                      |
+| -------------------------------------------------- | ----------------------------------------------------------- |
+| Exchange e filas `durable`, mensagens persistentes | Sobrevivem ao restart do broker                             |
+| Publisher confirms                                 | O upload só é aceito depois que o broker confirmou o evento |
+| `prefetch=1` e ack manual após o zip subir         | Um worker que morre no meio devolve a mensagem              |
+| Retry com backoff (30s, 2min, 10min) e DLQ         | Falha transitória não vira falha definitiva                 |
+| Idempotência por `eventId` no Redis                | Redelivery não gera zip nem e-mail duplicado                |
+| HPA de 2 a 10 réplicas do worker                   | A fila drena mais rápido conforme a carga sobe              |
 
 ---
 
 ## API
 
-| Método | Rota | Descrição |
-|---|---|---|
-| POST | `/auth/register` | Cria conta e devolve JWT |
-| POST | `/auth/login` | Autentica e devolve JWT |
-| GET | `/me` | Usuário da sessão |
-| POST | `/videos` | Upload `multipart/form-data`; responde `202` |
-| GET | `/videos` | Lista paginada (`status`, `search`, `page`, `limit`) |
-| GET | `/videos/:id` | Detalhe com linha do tempo dos eventos |
-| GET | `/videos/:id/download` | Stream do `.zip` |
-| GET | `/health` · `/health/ready` · `/metrics` | Liveness, readiness e métricas Prometheus |
+| Método | Rota                                     | Descrição                                            |
+| ------ | ---------------------------------------- | ---------------------------------------------------- |
+| POST   | `/auth/register`                         | Cria conta e devolve JWT                             |
+| POST   | `/auth/login`                            | Autentica e devolve JWT                              |
+| GET    | `/me`                                    | Usuário da sessão                                    |
+| POST   | `/videos`                                | Upload `multipart/form-data`; responde `202`         |
+| GET    | `/videos`                                | Lista paginada (`status`, `search`, `page`, `limit`) |
+| GET    | `/videos/:id`                            | Detalhe com linha do tempo dos eventos               |
+| GET    | `/videos/:id/download`                   | Stream do `.zip`                                     |
+| GET    | `/health` · `/health/ready` · `/metrics` | Liveness, readiness e métricas Prometheus            |
 
 Todas as rotas de vídeo são escopadas pelo usuário do token. Um vídeo de outra conta responde
 `404`, nunca `403` — assim a resposta não confirma que o id existe.
@@ -121,13 +121,13 @@ npm run test:integration -w @fiapx/video-api   # Testcontainers (precisa de Dock
 npm run test:bdd -w @fiapx/video-api           # Cucumber contra o ambiente do compose
 ```
 
-| Workspace | Testes | Cobre |
-|---|---|---|
-| `@fiapx/shared` | 21 | envelope, topologia de retry, política do consumidor, idempotência |
-| `@fiapx/video-api` | 75 | domínio, casos de uso, middleware, rotas, mapeamento de persistência |
-| `@fiapx/video-processor` | 16 | argumentos do ffmpeg, ciclo de processamento, limpeza do workspace |
-| `@fiapx/notification-service` | 14 | templates, escape de HTML, idempotência do envio |
-| `@fiapx/web` | 27 | formatação, cliente HTTP, polling adaptativo, dropzone |
+| Workspace                     | Testes | Cobre                                                                                                 |
+| ----------------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
+| `@fiapx/shared`               | 28     | envelope, topologia de retry, política do consumidor, idempotência, progresso no Redis                |
+| `@fiapx/video-api`            | 89     | domínio, casos de uso, middleware, rotas, mapeamento de persistência, metadados do vídeo              |
+| `@fiapx/video-processor`      | 30     | argumentos do ffmpeg e do ffprobe, leitura de progresso, ciclo de processamento, limpeza do workspace |
+| `@fiapx/notification-service` | 14     | templates, escape de HTML, idempotência do envio                                                      |
+| `@fiapx/web`                  | 38     | formatação, cliente HTTP, polling adaptativo, paginação, dropzone                                     |
 
 Cobertura mínima de 80% por workspace, verificada no CI.
 
@@ -160,13 +160,13 @@ Cada serviço segue Clean Architecture: `domain` (entidades e portas), `applicat
 
 Todas as variáveis estão documentadas em [`env.example`](env.example). As que mais importam:
 
-| Variável | Padrão | Para que serve |
-|---|---|---|
-| `JWT_SECRET` | — | Obrigatória. Assina os tokens |
-| `MAX_UPLOAD_BYTES` | `524288000` | Limite por arquivo (500 MB) |
-| `FRAME_INTERVAL_SECONDS` | `20` | Intervalo padrão entre frames; o usuário pode sobrescrever no upload |
-| `STORAGE_ENDPOINT` | MinIO local | Aponte para o S3 em produção e nada mais muda |
-| `PROCESSOR_PREFETCH` | `1` | Um vídeo por réplica: ffmpeg já satura a CPU disponível |
+| Variável                 | Padrão      | Para que serve                                                       |
+| ------------------------ | ----------- | -------------------------------------------------------------------- |
+| `JWT_SECRET`             | —           | Obrigatória. Assina os tokens                                        |
+| `MAX_UPLOAD_BYTES`       | `524288000` | Limite por arquivo (500 MB)                                          |
+| `FRAME_INTERVAL_SECONDS` | `20`        | Intervalo padrão entre frames; o usuário pode sobrescrever no upload |
+| `STORAGE_ENDPOINT`       | MinIO local | Aponte para o S3 em produção e nada mais muda                        |
+| `PROCESSOR_PREFETCH`     | `1`         | Um vídeo por réplica: ffmpeg já satura a CPU disponível              |
 
 > No Compose local a API conecta ao Postgres com o usuário `fiapx` (dono do banco) para simplificar
 > a demonstração. O `init.sql` também cria o role `fiapx_video`, restrito ao schema `video` — é ele

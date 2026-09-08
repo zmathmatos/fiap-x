@@ -92,10 +92,10 @@ pega. Esse é o requisito de "não perder requisição em pico" demonstrado ao v
 
 ## Se algo der errado
 
-| Sintoma | O que fazer |
-|---|---|
-| Container não fica healthy | `make ps` e `docker compose -f infra/docker-compose.yml logs <serviço>` |
-| Vídeo travado em `PENDING` | Verifique o RabbitMQ em 15672: há consumidor na fila? |
-| Vídeo travado em `PROCESSING` | `make logs` — procure o erro do ffmpeg |
-| Upload devolve 401 | O token expirou (8h). Saia e entre de novo |
-| Porta ocupada | `make down`, depois `make up` |
+| Sintoma                       | O que fazer                                                             |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| Container não fica healthy    | `make ps` e `docker compose -f infra/docker-compose.yml logs <serviço>` |
+| Vídeo travado em `PENDING`    | Verifique o RabbitMQ em 15672: há consumidor na fila?                   |
+| Vídeo travado em `PROCESSING` | `make logs` — procure o erro do ffmpeg                                  |
+| Upload devolve 401            | O token expirou (8h). Saia e entre de novo                              |
+| Porta ocupada                 | `make down`, depois `make up`                                           |

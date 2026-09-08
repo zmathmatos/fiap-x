@@ -8,10 +8,10 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, body, action }: EmptyStateProps): JSX.Element {
   return (
-    <div className="empty">
-      <p className="empty__title">{title}</p>
-      <p className="empty__body">{body}</p>
-      {action && <div className="empty__action">{action}</div>}
+    <div className="flex flex-col items-center text-center px-lg py-xl">
+      <p className="text-body-lg text-on-surface">{title}</p>
+      <p className="text-body-sm text-secondary mt-xs max-w-md">{body}</p>
+      {action && <div className="mt-lg">{action}</div>}
     </div>
   );
 }

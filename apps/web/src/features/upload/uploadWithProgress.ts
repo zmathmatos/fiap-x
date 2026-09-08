@@ -5,6 +5,7 @@ export interface UploadOptions {
   file: File;
   token: string;
   frameIntervalSeconds?: number;
+  title?: string;
   onProgress: (percent: number) => void;
   signal?: AbortSignal;
 }
@@ -19,9 +20,12 @@ export interface UploadOptions {
 export function uploadWithProgress(options: UploadOptions): Promise<VideoSummary> {
   return new Promise<VideoSummary>((resolve, reject) => {
     const form = new FormData();
+    // Both fields go in before the file: busboy hands the server its fields in
+    // wire order, and the use case needs them when the file part arrives.
     if (options.frameIntervalSeconds !== undefined) {
       form.append('frameIntervalSeconds', String(options.frameIntervalSeconds));
     }
+    if (options.title) form.append('title', options.title);
     form.append('file', options.file, options.file.name);
 
     const xhr = new XMLHttpRequest();

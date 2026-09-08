@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatBitrate,
   formatBytes,
   formatCount,
   formatDuration,
+  formatFrameRate,
   formatRelativeTime,
+  formatResolution,
 } from '../src/lib/format';
 
 describe('formatDuration', () => {
@@ -56,5 +59,44 @@ describe('formatRelativeTime', () => {
 
   it('falls back to a date for old entries', () => {
     expect(formatRelativeTime('2026-07-01T12:00:00Z', now)).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+  });
+});
+
+describe('formatResolution', () => {
+  it('joins width and height with a multiplication sign', () => {
+    expect(formatResolution(1920, 1080)).toBe('1920×1080');
+  });
+
+  it('falls back to a dash when either side is unknown', () => {
+    expect(formatResolution(1920, null)).toBe('—');
+    expect(formatResolution(null, null)).toBe('—');
+  });
+});
+
+describe('formatFrameRate', () => {
+  it('drops the trailing zeros of a whole frame rate', () => {
+    expect(formatFrameRate(24)).toBe('24 fps');
+  });
+
+  it('keeps the fractional part of a broadcast rate', () => {
+    expect(formatFrameRate(29.97)).toBe('29,97 fps');
+  });
+
+  it('falls back to a dash when unknown', () => {
+    expect(formatFrameRate(null)).toBe('—');
+  });
+});
+
+describe('formatBitrate', () => {
+  it('reports megabits per second for a typical video', () => {
+    expect(formatBitrate(8_500_000)).toBe('8,5 Mbps');
+  });
+
+  it('reports kilobits per second for a small one', () => {
+    expect(formatBitrate(28_000)).toBe('28 kbps');
+  });
+
+  it('falls back to a dash when unknown', () => {
+    expect(formatBitrate(null)).toBe('—');
   });
 });

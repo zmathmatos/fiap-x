@@ -8,9 +8,7 @@ export function formatDuration(ms: number | null): string {
 
   const pad = (value: number): string => String(value).padStart(2, '0');
 
-  return hours > 0
-    ? `${hours}:${pad(minutes)}:${pad(seconds)}`
-    : `${minutes}:${pad(seconds)}`;
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
 export function formatBytes(bytes: number | null): string {
@@ -61,4 +59,28 @@ export function formatDateTime(isoDate: string): string {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(new Date(isoDate));
+}
+
+const DASH = '—';
+
+export function formatResolution(width: number | null, height: number | null): string {
+  return width === null || height === null ? DASH : `${width}×${height}`;
+}
+
+export function formatFrameRate(fps: number | null): string {
+  if (fps === null || fps <= 0) return DASH;
+
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(fps)} fps`;
+}
+
+/** Mbps once the number would otherwise run to four digits of kbps. */
+export function formatBitrate(bitsPerSecond: number | null): string {
+  if (bitsPerSecond === null || bitsPerSecond <= 0) return DASH;
+
+  const format = (value: number): string =>
+    new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value);
+
+  return bitsPerSecond >= 1_000_000
+    ? `${format(bitsPerSecond / 1_000_000)} Mbps`
+    : `${format(bitsPerSecond / 1000)} kbps`;
 }

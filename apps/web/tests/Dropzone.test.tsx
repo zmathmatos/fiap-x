@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dropzone, isAccepted } from '../src/features/upload/Dropzone';
 
 function drop(files: File[]): void {
-  const zone = document.querySelector('.dropzone');
-  if (!zone) throw new Error('dropzone não encontrada');
+  // Selected by test id, not by a styling class: the drop surface is a plain div
+  // with no implicit role, and a restyle must not break the drag coverage.
+  const zone = screen.getByTestId('dropzone');
 
   fireEvent.drop(zone, {
     dataTransfer: { files, items: [], types: ['Files'] },
@@ -49,7 +50,10 @@ describe('Dropzone', () => {
     // only thing standing between a .pdf and the upload endpoint.
     drop([new File(['x'], 'doc.pdf', { type: 'application/pdf' })]);
 
-    expect(await screen.findByText(/Formato não suportado: doc\.pdf/)).toBeVisible();
+    // The alert fades in, so it is attached at opacity 0 for a moment. Waiting
+    // for it to become visible keeps the assertion honest without racing it.
+    const alert = await screen.findByText(/Formato não suportado: doc\.pdf/);
+    await waitFor(() => expect(alert).toBeVisible());
     expect(onFiles).not.toHaveBeenCalled();
   });
 
@@ -62,7 +66,10 @@ describe('Dropzone', () => {
       new File(['x'], 'doc.pdf', { type: 'application/pdf' }),
     ]);
 
-    expect(await screen.findByText(/Formato não suportado: doc\.pdf/)).toBeVisible();
+    // The alert fades in, so it is attached at opacity 0 for a moment. Waiting
+    // for it to become visible keeps the assertion honest without racing it.
+    const alert = await screen.findByText(/Formato não suportado: doc\.pdf/);
+    await waitFor(() => expect(alert).toBeVisible());
     expect(onFiles).toHaveBeenCalledTimes(1);
     expect(onFiles.mock.calls[0]?.[0]).toHaveLength(1);
   });

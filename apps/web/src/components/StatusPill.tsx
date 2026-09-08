@@ -7,11 +7,18 @@ const LABELS: Record<VideoStatus, string> = {
   FAILED: 'Falhou',
 };
 
-const MODIFIERS: Record<VideoStatus, string> = {
-  PENDING: 'pill--pending',
-  PROCESSING: 'pill--processing',
-  COMPLETED: 'pill--completed',
-  FAILED: 'pill--failed',
+const DOT: Record<VideoStatus, string> = {
+  PENDING: 'bg-secondary',
+  PROCESSING: 'bg-tertiary-container',
+  COMPLETED: 'bg-success',
+  FAILED: 'bg-error',
+};
+
+const TEXT: Record<VideoStatus, string> = {
+  PENDING: 'text-secondary',
+  PROCESSING: 'text-tertiary-container',
+  COMPLETED: 'text-success',
+  FAILED: 'text-error',
 };
 
 const IN_PROGRESS: VideoStatus[] = ['PENDING', 'PROCESSING'];
@@ -21,12 +28,19 @@ export function StatusPill({ status }: { status: VideoStatus }): JSX.Element {
 
   return (
     <span
-      className={`pill ${MODIFIERS[status]}`}
-      // Announced while work is happening; a settled status is read on navigation
-      // instead, so screen readers are not interrupted by every poll.
+      className={`inline-flex items-center gap-xs text-label-caps uppercase whitespace-nowrap ${TEXT[status]}`}
       role={inProgress ? 'status' : undefined}
     >
-      <span className="pill__dot" aria-hidden="true" />
+      <span className="relative flex w-1.5 h-1.5 shrink-0">
+        {}
+        {status === 'PROCESSING' && (
+          <span
+            className={`absolute inset-0 rounded-circle ${DOT[status]} animate-ping-slow motion-reduce:animate-none`}
+            aria-hidden="true"
+          />
+        )}
+        <span className={`relative w-1.5 h-1.5 rounded-circle ${DOT[status]}`} aria-hidden="true" />
+      </span>
       {LABELS[status]}
     </span>
   );

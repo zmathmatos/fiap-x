@@ -11,29 +11,27 @@ export function Field({ label, error, hint, ...rest }: FieldProps): JSX.Element 
   const errorId = `${id}-error`;
   const hintId = `${id}-hint`;
 
-  // Screen readers need the error and the hint tied to the input, not just placed
-  // next to it visually.
   const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(' ');
 
   return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
+    <div className="flex flex-col gap-xs">
+      <label className="text-body-sm text-on-secondary-container" htmlFor={id}>
         {label}
       </label>
       <input
         id={id}
-        className="field__input"
+        className={`field-input ${error ? 'border-error' : ''}`}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy || undefined}
         {...rest}
       />
       {hint && !error && (
-        <span className="field__hint" id={hintId}>
+        <span className="text-body-sm text-secondary" id={hintId}>
           {hint}
         </span>
       )}
       {error && (
-        <span className="field__error" id={errorId} role="alert">
+        <span className="text-body-sm text-error" id={errorId} role="alert">
           {error}
         </span>
       )}

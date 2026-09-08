@@ -3,6 +3,12 @@ export type VideoStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 export interface VideoSummary {
   id: string;
   originalName: string;
+  /** Name the user gave it; null when they never renamed it. */
+  title: string | null;
+  /** What to show: the title when there is one, the file name otherwise. */
+  displayName: string;
+  /** API path to the poster frame. Null until the worker has extracted one. */
+  thumbnailUrl: string | null;
   status: VideoStatus;
   frameCount: number | null;
   durationMs: number | null;
@@ -10,6 +16,13 @@ export interface VideoSummary {
   frameIntervalSeconds: number;
   errorReason: string | null;
   downloadable: boolean;
+  codec: string | null;
+  width: number | null;
+  height: number | null;
+  frameRate: number | null;
+  bitrateBps: number | null;
+  /** Live progress while processing; null when unknown or already finished. */
+  progressPercent: number | null;
   createdAt: string;
   updatedAt: string;
 }

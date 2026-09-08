@@ -40,7 +40,7 @@ export function DownloadButton({
         Baixar zip
       </Button>
       {error && (
-        <span className="field__error" role="alert">
+        <span className="block text-body-sm text-error" role="alert">
           {error}
         </span>
       )}

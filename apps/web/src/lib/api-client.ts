@@ -1,4 +1,4 @@
-import type { AuthResult, AuthUser, VideoDetail, VideoPage } from './types';
+import type { AuthResult, AuthUser, VideoDetail, VideoPage, VideoSummary } from './types';
 
 export const API_BASE = import.meta.env?.VITE_API_BASE ?? '/api';
 
@@ -92,6 +92,35 @@ export const apiClient = {
 
   getVideo(videoId: string, options: AuthedOptions): Promise<VideoDetail> {
     return request<VideoDetail>(`/videos/${videoId}`, options);
+  },
+
+  renameVideo(
+    videoId: string,
+    title: string | null,
+    options: AuthedOptions,
+  ): Promise<VideoSummary> {
+    return request<VideoSummary>(`/videos/${videoId}`, {
+      ...options,
+      method: 'PATCH',
+      body: { title },
+    });
+  },
+
+  /**
+   * The poster lives behind the same bearer token as everything else, and an
+   * `<img src>` cannot carry a header — so it is fetched and handed back as a blob
+   * URL the caller is responsible for revoking.
+   */
+  async fetchThumbnail(path: string, options: AuthedOptions): Promise<string> {
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${options.token}` },
+      signal: options.signal,
+    });
+
+    if (response.status === 401) options.onUnauthorized?.();
+    if (!response.ok) throw new ApiError('Miniatura indisponível.', response.status);
+
+    return URL.createObjectURL(await response.blob());
   },
 
   downloadUrl(videoId: string): string {

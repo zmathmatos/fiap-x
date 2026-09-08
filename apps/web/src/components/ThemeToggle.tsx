@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Button } from './Button';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -14,22 +13,34 @@ function readStoredTheme(): Theme {
   }
 }
 
+function prefersDark(): boolean {
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+}
+
 const NEXT: Record<Theme, Theme> = { system: 'light', light: 'dark', dark: 'system' };
 const LABEL: Record<Theme, string> = { system: 'Automático', light: 'Claro', dark: 'Escuro' };
+const ICON: Record<Theme, string> = {
+  system: 'brightness_auto',
+  light: 'light_mode',
+  dark: 'dark_mode',
+};
 
-export function ThemeToggle(): JSX.Element {
+interface ThemeToggleProps {
+  collapsed?: boolean;
+}
+
+export function ThemeToggle({ collapsed = false }: ThemeToggleProps): JSX.Element {
   const [theme, setTheme] = useState<Theme>(readStoredTheme);
 
   useEffect(() => {
     const root = document.documentElement;
 
-    // "system" removes the attribute entirely so the prefers-color-scheme media
-    // query in tokens.css takes over again.
-    if (theme === 'system') {
-      root.removeAttribute('data-theme');
-    } else {
-      root.setAttribute('data-theme', theme);
-    }
+    const apply = (): void => {
+      const resolved = theme === 'system' ? (prefersDark() ? 'dark' : 'light') : theme;
+      root.setAttribute('data-theme', resolved);
+    };
+
+    apply();
 
     try {
       if (theme === 'system') window.localStorage.removeItem(STORAGE_KEY);
@@ -37,16 +48,27 @@ export function ThemeToggle(): JSX.Element {
     } catch {
       // Preference just will not persist.
     }
+
+    if (theme !== 'system') return;
+
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    media?.addEventListener('change', apply);
+    return () => media?.removeEventListener('change', apply);
   }, [theme]);
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
+    <button
+      type="button"
       onClick={() => setTheme(NEXT[theme])}
       title={`Tema: ${LABEL[theme]}. Clique para alternar.`}
+      className={`w-full flex items-center gap-sm h-10 px-2.5 rounded-full text-body-sm text-secondary hover:bg-surface-container-high transition-colors ${
+        collapsed ? 'justify-center' : ''
+      }`}
     >
-      Tema: {LABEL[theme]}
-    </Button>
+      <span className="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">
+        {ICON[theme]}
+      </span>
+      {!collapsed && <span className="whitespace-nowrap">Tema: {LABEL[theme]}</span>}
+    </button>
   );
 }

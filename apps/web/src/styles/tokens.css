@@ -1,143 +1,123 @@
 /*
- * Design tokens.
+ * Design tokens — Material 3 scheme taken from the Stitch mockups.
  *
- * The scale is deliberately not round: 13px / 15px body sizes and a 4px spacing
- * grid read as a tool built for looking at data, not a landing page.
+ * Values are raw RGB channels rather than hex: Tailwind composes them as
+ * `rgb(var(--token) / <alpha-value>)`, which is what makes `bg-primary/10` and
+ * friends work on a variable-backed palette.
+ *
+ * The mockups specify the light theme only; the dark block below mirrors every
+ * name so a component never has to know which theme it is in. The accent stays
+ * the same in both: it is the one colour that identifies an action, and a theme
+ * swap that moved it would make the primary button unrecognisable.
+ *
+ * The accent is FIAP's magenta. `--primary` is the darker step because white text
+ * sits on it in the filled button: #ed145b behind white measures 4.33:1, under
+ * the 4.5:1 AA needs for 13px text, while #c10e4a measures 6.12:1. The exact
+ * brand magenta is `--primary-container`, which is where it shows uncovered — the
+ * logo, the hover state, the focus ring.
  */
 :root {
-  color-scheme: light dark;
+  --background: 250 248 255;
+  --surface: 250 248 255;
+  --surface-variant: 227 225 233;
+  --surface-bright: 250 248 255;
+  --surface-dim: 219 217 224;
+  --surface-container: 239 237 244;
+  --surface-container-lowest: 255 255 255;
+  --surface-container-low: 245 242 250;
+  --surface-container-high: 233 231 238;
+  --surface-container-highest: 227 225 233;
+  --surface-tint: 237 20 91;
 
-  --font-sans:
-    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --on-background: 27 27 32;
+  --on-surface: 27 27 32;
+  --on-surface-variant: 94 63 61;
 
-  --text-xs: 0.6875rem; /* 11px */
-  --text-sm: 0.8125rem; /* 13px */
-  --text-base: 0.9375rem; /* 15px */
-  --text-lg: 1.0625rem; /* 17px */
-  --text-xl: 1.375rem; /* 22px */
-  --text-2xl: 1.75rem; /* 28px */
+  --primary: 193 14 74; /* #c10e4a */
+  --on-primary: 255 255 255;
+  --primary-container: 237 20 91; /* #ed145b — FIAP */
+  --on-primary-container: 255 251 255;
+  --primary-fixed: 255 214 228;
+  --primary-fixed-dim: 255 154 187;
 
-  --leading-tight: 1.25;
-  --leading-normal: 1.55;
+  --secondary: 95 94 96;
+  --on-secondary: 255 255 255;
+  --secondary-container: 226 223 225;
+  --on-secondary-container: 99 98 100;
+  --secondary-fixed: 228 226 228;
+  --secondary-fixed-dim: 200 198 200;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-8: 48px;
-  --space-10: 64px;
+  --tertiary: 0 101 119;
+  --on-tertiary: 255 255 255;
+  --tertiary-container: 0 128 150;
+  --on-tertiary-container: 249 253 255;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-pill: 999px;
+  --error: 186 26 26;
+  --on-error: 255 255 255;
+  --error-container: 255 218 214;
+  --on-error-container: 147 0 10;
 
-  --sidebar-width: 232px;
-  --content-max: 1120px;
+  --success: 16 185 129;
 
-  /* Warm paper greys — not the blue-tinted greys every framework ships with. */
-  --bg: #fbfbf9;
-  --surface: #ffffff;
-  --surface-sunken: #f5f4f1;
-  --surface-hover: #f1f0ec;
-  --border: #e4e2dd;
-  --border-strong: #cfccc5;
-  --text: #1b1a17;
-  --text-secondary: #57544e;
-  --text-muted: #85817a;
+  --outline: 147 110 108;
+  --outline-variant: 232 188 186;
 
-  --accent: #1f6f4a;
-  --accent-hover: #185a3c;
-  --accent-soft: #e8f1eb;
-  --accent-border: #b9d6c6;
+  --inverse-surface: 47 48 53;
+  --inverse-on-surface: 242 240 247;
+  --inverse-primary: 255 154 187;
 
-  --danger: #9e3327;
-  --danger-soft: #fbeae7;
-  --danger-border: #edc4bd;
-
-  --warning: #86620d;
-  --warning-soft: #fbf1dc;
-  --warning-border: #e8d3a5;
-
-  --info: #2b5877;
-  --info-soft: #e7eef4;
-  --info-border: #bcd0de;
-
-  --shadow-sm: 0 1px 2px rgb(27 26 23 / 0.05);
-  --shadow-md: 0 2px 8px rgb(27 26 23 / 0.07);
-  --shadow-lg: 0 8px 28px rgb(27 26 23 / 0.11);
-
-  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: #15161a;
-    --surface: #1c1e23;
-    --surface-sunken: #202329;
-    --surface-hover: #272b31;
-    --border: #2f333a;
-    --border-strong: #434851;
-    --text: #eceef1;
-    --text-secondary: #adb2ba;
-    --text-muted: #7f858e;
-
-    --accent: #4fb083;
-    --accent-hover: #63c295;
-    --accent-soft: #16352a;
-    --accent-border: #27523f;
-
-    --danger: #e08072;
-    --danger-soft: #351f1c;
-    --danger-border: #4d2d28;
-
-    --warning: #d3a44c;
-    --warning-soft: #322715;
-    --warning-border: #4a3a1e;
-
-    --info: #83b2d4;
-    --info-soft: #1a2833;
-    --info-border: #2b3f4f;
-
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 2px 8px rgb(0 0 0 / 0.45);
-    --shadow-lg: 0 8px 28px rgb(0 0 0 / 0.55);
-  }
+  color-scheme: light;
 }
 
 [data-theme='dark'] {
-  --bg: #15161a;
-  --surface: #1c1e23;
-  --surface-sunken: #202329;
-  --surface-hover: #272b31;
-  --border: #2f333a;
-  --border-strong: #434851;
-  --text: #eceef1;
-  --text-secondary: #adb2ba;
-  --text-muted: #7f858e;
+  --background: 30 30 30;
+  --surface: 19 19 22;
+  --surface-variant: 30 30 30;
+  --surface-bright: 57 57 61;
+  --surface-dim: 19 19 22;
+  --surface-container: 31 31 35;
+  --surface-container-lowest: 14 14 17;
+  --surface-container-low: 27 27 31;
+  --surface-container-high: 42 42 46;
+  --surface-container-highest: 53 53 57;
+  --surface-tint: 255 179 176;
 
-  --accent: #4fb083;
-  --accent-hover: #63c295;
-  --accent-soft: #16352a;
-  --accent-border: #27523f;
+  --on-background: 229 225 233;
+  --on-surface: 229 225 233;
+  --on-surface-variant: 202 196 205;
 
-  --danger: #e08072;
-  --danger-soft: #351f1c;
-  --danger-border: #4d2d28;
+  --primary: 193 14 74; /* #c10e4a */
+  --on-primary: 255 255 255;
+  --primary-container: 237 20 91; /* #ed145b — FIAP */
+  --on-primary-container: 255 218 216;
+  --primary-fixed: 255 214 228;
+  --primary-fixed-dim: 255 154 187;
 
-  --warning: #d3a44c;
-  --warning-soft: #322715;
-  --warning-border: #4a3a1e;
+  --secondary: 200 198 200;
+  --on-secondary: 48 48 51;
+  --secondary-container: 70 70 74;
+  --on-secondary-container: 226 223 225;
+  --secondary-fixed: 228 226 228;
+  --secondary-fixed-dim: 200 198 200;
 
-  --info: #83b2d4;
-  --info-soft: #1a2833;
-  --info-border: #2b3f4f;
+  --tertiary: 116 212 237;
+  --on-tertiary: 0 54 63;
+  --tertiary-container: 0 128 150;
+  --on-tertiary-container: 249 253 255;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.45);
-  --shadow-lg: 0 8px 28px rgb(0 0 0 / 0.55);
+  --error: 255 180 171;
+  --on-error: 105 0 5;
+  --error-container: 147 0 10;
+  --on-error-container: 255 218 214;
+
+  --success: 52 211 153;
+
+  --outline: 148 143 153;
+  --outline-variant: 72 69 78;
+
+  --inverse-surface: 229 225 233;
+  --inverse-on-surface: 48 48 51;
+  --inverse-primary: 237 20 91;
+
+  color-scheme: dark;
 }

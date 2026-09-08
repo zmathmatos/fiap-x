@@ -17,9 +17,17 @@ export function pollIntervalFor(videos: Pick<VideoSummary, 'status'>[]): number 
   return busy ? FAST_POLL_MS : SLOW_POLL_MS;
 }
 
+export const PAGE_SIZE = 20;
+
+/** Never zero: an empty library still shows "1 de 1" rather than "1 de 0". */
+export function totalPages(total: number, limit: number): number {
+  return Math.max(1, Math.ceil(total / limit));
+}
+
 export interface UseVideosFilters {
   status?: string;
   search?: string;
+  page?: number;
 }
 
 export interface UseVideosResult {
@@ -38,28 +46,29 @@ export function useVideos(filters: UseVideosFilters): UseVideosResult {
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { status, search } = filters;
+  const { status, search, page = 1 } = filters;
 
   const load = useCallback(async () => {
     if (!token) return;
 
     try {
-      const page = await apiClient.listVideos({
+      const result = await apiClient.listVideos({
         token,
         onUnauthorized: logout,
         status,
         search,
-        limit: 50,
+        page,
+        limit: PAGE_SIZE,
       });
-      setVideos(page.items);
-      setTotal(page.total);
+      setVideos(result.items);
+      setTotal(result.total);
       setError(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível carregar os vídeos.');
     } finally {
       setIsLoading(false);
     }
-  }, [token, logout, status, search]);
+  }, [token, logout, status, search, page]);
 
   useEffect(() => {
     let active = true;

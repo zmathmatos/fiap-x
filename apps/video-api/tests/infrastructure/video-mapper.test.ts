@@ -16,6 +16,11 @@ function makeRow(overrides: Partial<VideoEntity> = {}): VideoEntity {
     sizeBytes: null,
     frameIntervalSeconds: 20,
     errorReason: null,
+    codec: null,
+    width: null,
+    height: null,
+    frameRate: null,
+    bitrateBps: null,
     createdAt: new Date('2026-09-01T12:00:00Z'),
     updatedAt: new Date('2026-09-01T12:00:00Z'),
     ...overrides,
@@ -76,6 +81,29 @@ describe('video mapper', () => {
     video.markCompleted({ zipKey: 'z.zip', frameCount: 1, durationMs: 2, sizeBytes: 3 });
 
     expect(toPersistence(video).sizeBytes).toBe('3');
+  });
+
+  it('round-trips the probed metadata', () => {
+    const video = toDomain(
+      makeRow({
+        status: 'COMPLETED',
+        codec: 'h264',
+        width: 1920,
+        height: 1080,
+        frameRate: '29.97',
+        bitrateBps: '8500000',
+      }),
+    );
+
+    expect(video.frameRate).toBe(29.97);
+    expect(video.bitrateBps).toBe(8_500_000);
+    expect(toPersistence(video)).toMatchObject({
+      codec: 'h264',
+      width: 1920,
+      height: 1080,
+      frameRate: '29.97',
+      bitrateBps: '8500000',
+    });
   });
 
   it('carries the failure reason through', () => {

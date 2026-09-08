@@ -24,13 +24,15 @@ function makeDeps() {
   const mailer = { send: jest.fn().mockResolvedValue(undefined) };
   const idempotency = { markProcessed: jest.fn().mockResolvedValue(true) };
   const config = { appUrl: 'http://localhost:8080' };
+  const metrics = { sent: jest.fn() };
   const logger = createLogger('test');
 
   return {
     mailer,
     idempotency,
-    failed: new NotifyVideoFailedUseCase({ mailer, idempotency, config, logger }),
-    processed: new NotifyVideoProcessedUseCase({ mailer, idempotency, config, logger }),
+    metrics,
+    failed: new NotifyVideoFailedUseCase({ mailer, idempotency, metrics, config, logger }),
+    processed: new NotifyVideoProcessedUseCase({ mailer, idempotency, metrics, config, logger }),
   };
 }
 
@@ -41,9 +43,7 @@ describe('NotifyVideoFailedUseCase', () => {
     await failed.execute(createEnvelope(ROUTING_KEYS.VIDEO_FAILED, failedPayload));
 
     expect(mailer.send).toHaveBeenCalledTimes(1);
-    expect(mailer.send).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'user@fiapx.local' }),
-    );
+    expect(mailer.send).toHaveBeenCalledWith(expect.objectContaining({ to: 'user@fiapx.local' }));
   });
 
   it('does not send twice for the same event', async () => {
@@ -64,12 +64,21 @@ describe('NotifyVideoFailedUseCase', () => {
   });
 
   it('lets a smtp failure surface so the message is retried', async () => {
-    const { mailer, failed } = makeDeps();
+    const { mailer, metrics, failed } = makeDeps();
     mailer.send.mockRejectedValue(new Error('smtp unreachable'));
 
     await expect(
       failed.execute(createEnvelope(ROUTING_KEYS.VIDEO_FAILED, failedPayload)),
     ).rejects.toThrow('smtp unreachable');
+    expect(metrics.sent).not.toHaveBeenCalled();
+  });
+
+  it('counts the e-mail that actually left, not the event that arrived', async () => {
+    const { metrics, failed } = makeDeps();
+
+    await failed.execute(createEnvelope(ROUTING_KEYS.VIDEO_FAILED, failedPayload));
+
+    expect(metrics.sent).toHaveBeenCalledWith('failure');
   });
 
   it('skips the e-mail when the event carries no recipient', async () => {

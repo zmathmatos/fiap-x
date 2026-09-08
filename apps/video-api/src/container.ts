@@ -4,12 +4,15 @@ import {
   createLogger,
   createObjectStorage,
   createRedisIdempotencyStore,
+  createRedisProgressStore,
   type Logger,
   type ObjectStorage,
 } from '@fiapx/shared';
 import type { DataSource } from 'typeorm';
 import type { Config } from './config';
 import { createDataSource } from './infrastructure/database/data-source';
+import { metricsExporter, videoMetrics } from './infrastructure/metrics/registry';
+import { withProgressFallback } from './infrastructure/progress/resilient-progress-store';
 import { TypeOrmUserRepository } from './infrastructure/repositories/typeorm-user-repository';
 import { TypeOrmVideoRepository } from './infrastructure/repositories/typeorm-video-repository';
 import { BcryptPasswordHasher } from './infrastructure/auth/bcrypt-password-hasher';
@@ -20,11 +23,16 @@ import { GetCurrentUserUseCase } from './application/use-cases/get-current-user'
 import { UploadVideoUseCase } from './application/use-cases/upload-video';
 import { ListVideosUseCase } from './application/use-cases/list-videos';
 import { GetVideoUseCase } from './application/use-cases/get-video';
+import { RenameVideoUseCase } from './application/use-cases/rename-video';
+import { GetVideoThumbnailUseCase } from './application/use-cases/get-video-thumbnail';
 import { DownloadVideoZipUseCase } from './application/use-cases/download-video-zip';
 import { ApplyProcessingEventUseCase } from './application/use-cases/apply-processing-event';
 import { AuthController } from './interface/http/controllers/auth-controller';
 import { VideoController } from './interface/http/controllers/video-controller';
-import { HealthController } from './interface/http/controllers/health-controller';
+import {
+  HealthController,
+  type HealthChecks,
+} from './interface/http/controllers/health-controller';
 
 export interface Container {
   logger: Logger;
@@ -38,6 +46,15 @@ export interface Container {
   tokenService: JwtTokenService;
   applyProcessingEvent: ApplyProcessingEventUseCase;
   shutdown(): Promise<void>;
+}
+
+/** A dependency is healthy when its probe resolves truthy; any throw means "no". */
+async function reachable(probe: () => Promise<unknown>): Promise<boolean> {
+  try {
+    return (await probe()) !== false;
+  } catch {
+    return false;
+  }
 }
 
 /** Wires every concrete adapter once, at boot. Nothing else constructs dependencies. */
@@ -66,6 +83,7 @@ export async function buildContainer(config: Config): Promise<Container> {
   const tokenService = new JwtTokenService(config.jwtSecret, config.jwtExpiresIn);
   const publisher = rabbit.createPublisher(config.rabbitmqExchange);
   const idempotency = createRedisIdempotencyStore(redis, { prefix: 'video-api' });
+  const progress = withProgressFallback(createRedisProgressStore(redis));
 
   const authController = new AuthController(
     new RegisterUserUseCase(users, hasher, tokenService),
@@ -79,34 +97,28 @@ export async function buildContainer(config: Config): Promise<Container> {
         bucketRaw: config.storage.bucketRaw,
         defaultFrameIntervalSeconds: config.frameIntervalSeconds,
       }),
-      listVideos: new ListVideosUseCase(videos),
-      getVideo: new GetVideoUseCase(videos),
+      listVideos: new ListVideosUseCase(videos, progress),
+      getVideo: new GetVideoUseCase(videos, progress),
       downloadVideoZip: new DownloadVideoZipUseCase(videos, storage, {
+        bucketZips: config.storage.bucketZips,
+      }),
+      renameVideo: new RenameVideoUseCase(videos),
+      getVideoThumbnail: new GetVideoThumbnailUseCase(videos, storage, {
         bucketZips: config.storage.bucketZips,
       }),
     },
     { maxUploadBytes: config.maxUploadBytes },
+    videoMetrics,
   );
 
-  const healthController = new HealthController({
-    postgres: async () => {
-      try {
-        await dataSource.query('SELECT 1');
-        return true;
-      } catch {
-        return false;
-      }
-    },
+  const healthChecks: HealthChecks = {
+    postgres: () => reachable(() => dataSource.query('SELECT 1')),
     rabbitmq: async () => rabbit.isHealthy(),
-    storage: async () => storage.isHealthy(config.storage.bucketRaw),
-    redis: async () => {
-      try {
-        return (await redis.ping()) === 'PONG';
-      } catch {
-        return false;
-      }
-    },
-  });
+    storage: () => storage.isHealthy(config.storage.bucketRaw),
+    redis: () => reachable(async () => (await redis.ping()) === 'PONG'),
+  };
+
+  const healthController = new HealthController(healthChecks, metricsExporter);
 
   return {
     logger,

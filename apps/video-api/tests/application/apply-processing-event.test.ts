@@ -64,9 +64,7 @@ describe('ApplyProcessingEventUseCase', () => {
   it('moves the video to PROCESSING on video.processing.started', async () => {
     const { repo, useCase } = makeDeps();
 
-    await useCase.execute(
-      createEnvelope(ROUTING_KEYS.VIDEO_PROCESSING_STARTED, { videoId: 'v1' }),
-    );
+    await useCase.execute(createEnvelope(ROUTING_KEYS.VIDEO_PROCESSING_STARTED, { videoId: 'v1' }));
 
     expect(repo.save).toHaveBeenCalledWith(
       expect.objectContaining({ status: VideoStatus.PROCESSING }),
@@ -128,9 +126,7 @@ describe('ApplyProcessingEventUseCase', () => {
     completed.markCompleted({ zipKey: 'z', frameCount: 1, durationMs: 1, sizeBytes: 1 });
     const { repo, useCase } = makeDeps(completed);
 
-    await useCase.execute(
-      createEnvelope(ROUTING_KEYS.VIDEO_PROCESSING_STARTED, { videoId: 'v1' }),
-    );
+    await useCase.execute(createEnvelope(ROUTING_KEYS.VIDEO_PROCESSING_STARTED, { videoId: 'v1' }));
 
     expect(repo.save).not.toHaveBeenCalled();
   });

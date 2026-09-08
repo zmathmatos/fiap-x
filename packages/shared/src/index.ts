@@ -4,3 +4,4 @@ export * from './logger';
 export * from './messaging';
 export * from './storage';
 export * from './idempotency';
+export * from './progress';

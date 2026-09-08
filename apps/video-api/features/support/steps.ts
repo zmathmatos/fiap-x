@@ -79,8 +79,6 @@ async function waitForStatus(
   );
 }
 
-// --------------------------------------------------------------------- given
-
 Given('que existe um usuário autenticado', async function (this: FiapxWorld) {
   await this.createUser();
 });
@@ -94,8 +92,6 @@ Given('que o primeiro enviou um vídeo', async function (this: FiapxWorld) {
   await upload(this, 'sample.mp4');
   assert.equal(this.lastStatus, 202, 'o upload deveria ter sido aceito');
 });
-
-// ---------------------------------------------------------------------- when
 
 When('ele envia o vídeo {string}', async function (this: FiapxWorld, fileName: string) {
   await upload(this, fileName);
@@ -131,8 +127,6 @@ When('o segundo consulta o vídeo do primeiro', async function (this: FiapxWorld
   this.lastStatus = response.status;
 });
 
-// ---------------------------------------------------------------------- then
-
 Then('a resposta é {int}', function (this: FiapxWorld, expected: number) {
   assert.equal(this.lastStatus, expected);
 });
@@ -163,27 +157,30 @@ Then(
   },
 );
 
-Then('o download retorna um arquivo zip com pelo menos {int} frame', async function (
-  this: FiapxWorld,
-  minimum: number,
-) {
-  const response = await this.authedFetch(`/videos/${this.videoId}/download`);
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get('content-type') ?? '', /application\/zip/);
+Then(
+  'o download retorna um arquivo zip com pelo menos {int} frame',
+  async function (this: FiapxWorld, minimum: number) {
+    const response = await this.authedFetch(`/videos/${this.videoId}/download`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /application\/zip/);
 
-  const zip = Buffer.from(await response.arrayBuffer());
-  this.lastZip = zip;
+    const zip = Buffer.from(await response.arrayBuffer());
+    this.lastZip = zip;
 
-  // "PK\x03\x04" is the local file header: its presence proves the archive holds
-  // at least one entry, without unzipping anything.
-  assert.equal(zip.subarray(0, 2).toString('latin1'), 'PK', 'o corpo não é um zip');
+    // "PK\x03\x04" is the local file header: its presence proves the archive holds
+    // at least one entry, without unzipping anything.
+    assert.equal(zip.subarray(0, 2).toString('latin1'), 'PK', 'o corpo não é um zip');
 
-  let entries = 0;
-  for (let index = 0; index < zip.length - 3; index += 1) {
-    if (zip[index] === 0x50 && zip[index + 1] === 0x4b && zip[index + 2] === 0x03) entries += 1;
-  }
-  assert.ok(entries >= minimum, `o zip deveria ter ao menos ${minimum} arquivo(s), tem ${entries}`);
-});
+    let entries = 0;
+    for (let index = 0; index < zip.length - 3; index += 1) {
+      if (zip[index] === 0x50 && zip[index + 1] === 0x4b && zip[index + 2] === 0x03) entries += 1;
+    }
+    assert.ok(
+      entries >= minimum,
+      `o zip deveria ter ao menos ${minimum} arquivo(s), tem ${entries}`,
+    );
+  },
+);
 
 Then('o motivo da falha é informado', async function (this: FiapxWorld) {
   const body = await readVideo(this, this.videoId);
@@ -191,28 +188,28 @@ Then('o motivo da falha é informado', async function (this: FiapxWorld) {
   assert.ok(body.errorReason && body.errorReason.length > 0, 'o motivo da falha está vazio');
 });
 
-Then('um e-mail sobre {string} é entregue ao usuário', async function (
-  this: FiapxWorld,
-  fileName: string,
-) {
-  const deadline = Date.now() + 30_000;
+Then(
+  'um e-mail sobre {string} é entregue ao usuário',
+  async function (this: FiapxWorld, fileName: string) {
+    const deadline = Date.now() + 30_000;
 
-  while (Date.now() < deadline) {
-    const response = await fetch(`${MAILHOG_URL}/api/v2/messages?limit=100`);
-    if (response.ok) {
-      const inbox = (await response.json()) as { items: MailhogMessage[] };
+    while (Date.now() < deadline) {
+      const response = await fetch(`${MAILHOG_URL}/api/v2/messages?limit=100`);
+      if (response.ok) {
+        const inbox = (await response.json()) as { items: MailhogMessage[] };
 
-      const found = inbox.items.some((message) => {
-        const to = message.Content.Headers.To?.join(',') ?? '';
-        const subject = message.Content.Headers.Subject?.join(' ') ?? '';
-        return to.includes(this.session.email) && subject.includes(fileName);
-      });
+        const found = inbox.items.some((message) => {
+          const to = message.Content.Headers.To?.join(',') ?? '';
+          const subject = message.Content.Headers.Subject?.join(' ') ?? '';
+          return to.includes(this.session.email) && subject.includes(fileName);
+        });
 
-      if (found) return;
+        if (found) return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-  }
-
-  throw new Error(`Nenhum e-mail sobre "${fileName}" chegou para ${this.session.email}.`);
-});
+    throw new Error(`Nenhum e-mail sobre "${fileName}" chegou para ${this.session.email}.`);
+  },
+);

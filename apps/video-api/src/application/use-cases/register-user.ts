@@ -31,9 +31,7 @@ export class RegisterUserUseCase {
     }
     assertValidEmail(email);
     if (input.password.length < MIN_PASSWORD_LENGTH) {
-      throw new ValidationError(
-        `A senha precisa de ao menos ${MIN_PASSWORD_LENGTH} caracteres.`,
-      );
+      throw new ValidationError(`A senha precisa de ao menos ${MIN_PASSWORD_LENGTH} caracteres.`);
     }
 
     if (await this.users.findByEmail(email)) {

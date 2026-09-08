@@ -5,8 +5,10 @@ import type {
   ExtractFramesInput,
   ExtractFramesResult,
   FrameExtractor,
+  VideoMetadata,
 } from '../../domain/ports/frame-extractor';
-import { buildFfmpegArgs, buildFfprobeArgs } from './build-ffmpeg-args';
+import { buildFfmpegArgs, buildFfprobeArgs, parseFfprobeMetadata } from './build-ffmpeg-args';
+import { createProgressReader, FFMPEG_PROGRESS_ARGS } from './ffmpeg-progress';
 
 export interface FfmpegConfig {
   ffmpegPath: string;
@@ -19,7 +21,7 @@ export interface FfmpegConfig {
  * `spawn` with an argument array, never `exec`: a filename is user-controlled and
  * must never reach a shell.
  */
-function run(command: string, args: string[]): Promise<string> {
+function run(command: string, args: string[], onStdout?: (chunk: string) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -27,7 +29,12 @@ function run(command: string, args: string[]): Promise<string> {
     let stderr = '';
 
     child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString('utf8');
+      const text = chunk.toString('utf8');
+      if (onStdout) {
+        onStdout(text);
+        return;
+      }
+      stdout += text;
     });
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8');
@@ -52,27 +59,44 @@ export class FfmpegFrameExtractor implements FrameExtractor {
   ) {}
 
   async extract(input: ExtractFramesInput): Promise<ExtractFramesResult> {
-    const durationMs = await this.probeDurationMs(input.inputPath);
+    // Probing first is what makes the progress percentage possible: without a
+    // duration there is nothing to measure ffmpeg's position against.
+    const metadata = await this.probe(input.inputPath);
 
-    await run(this.config.ffmpegPath, buildFfmpegArgs(input));
+    const readProgress = input.onProgress
+      ? createProgressReader(metadata.durationMs, input.onProgress)
+      : undefined;
+
+    // ffmpeg reads options positionally: anything after the output path applies to
+    // a next output that does not exist, so the progress flags go just before it.
+    const args = buildFfmpegArgs(input);
+    args.splice(args.length - 1, 0, ...FFMPEG_PROGRESS_ARGS);
+
+    await run(this.config.ffmpegPath, args, readProgress);
 
     const files = await readdir(input.outputDir);
     const frameCount = files.filter((name) => name.endsWith('.jpg')).length;
 
-    this.logger.info({ frameCount, durationMs }, 'frames extracted');
-    return { frameCount, durationMs };
+    this.logger.info({ frameCount, durationMs: metadata.durationMs }, 'frames extracted');
+    return { frameCount, metadata };
   }
 
-  private async probeDurationMs(inputPath: string): Promise<number> {
+  private async probe(inputPath: string): Promise<VideoMetadata> {
     try {
-      const output = await run(this.config.ffprobePath, buildFfprobeArgs(inputPath));
-      const seconds = Number.parseFloat(output.trim());
-      return Number.isFinite(seconds) ? Math.round(seconds * 1000) : 0;
+      return parseFfprobeMetadata(await run(this.config.ffprobePath, buildFfprobeArgs(inputPath)));
     } catch (error) {
-      // A missing duration is not worth failing the job over — some containers
-      // simply do not carry one. Frame extraction still works.
-      this.logger.warn({ err: error }, 'could not read video duration');
-      return 0;
+      // Missing metadata is not worth failing the job over — some containers simply
+      // do not carry it. Frame extraction still works, only the bar and the detail
+      // panel go empty.
+      this.logger.warn({ err: error }, 'could not probe video metadata');
+      return {
+        durationMs: 0,
+        codec: null,
+        width: null,
+        height: null,
+        frameRate: null,
+        bitrateBps: null,
+      };
     }
   }
 }

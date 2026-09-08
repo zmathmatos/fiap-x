@@ -29,6 +29,12 @@ export class VideoEntity {
   @Column({ name: 'original_name', type: 'varchar', length: 255 })
   originalName!: string;
 
+  @Column({ name: 'title', type: 'varchar', length: 200, nullable: true })
+  title!: string | null;
+
+  @Column({ name: 'thumbnail_key', type: 'varchar', length: 512, nullable: true })
+  thumbnailKey!: string | null;
+
   @Column({ name: 'storage_key', type: 'varchar', length: 512 })
   storageKey!: string;
 
@@ -58,6 +64,23 @@ export class VideoEntity {
 
   @Column({ name: 'error_reason', type: 'text', nullable: true })
   errorReason!: string | null;
+
+  @Column({ name: 'codec', type: 'varchar', length: 32, nullable: true })
+  codec!: string | null;
+
+  @Column({ name: 'width', type: 'int', nullable: true })
+  width!: number | null;
+
+  @Column({ name: 'height', type: 'int', nullable: true })
+  height!: number | null;
+
+  // numeric and bigint both come back as strings from the pg driver; the mapper
+  // converts them, the same way it already does for size_bytes.
+  @Column({ name: 'frame_rate', type: 'numeric', precision: 7, scale: 2, nullable: true })
+  frameRate!: string | null;
+
+  @Column({ name: 'bitrate_bps', type: 'bigint', nullable: true })
+  bitrateBps!: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

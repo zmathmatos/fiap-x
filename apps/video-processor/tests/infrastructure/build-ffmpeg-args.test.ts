@@ -1,6 +1,7 @@
 import {
   buildFfmpegArgs,
   buildFfprobeArgs,
+  parseFfprobeMetadata,
 } from '../../src/infrastructure/ffmpeg/build-ffmpeg-args';
 
 describe('buildFfmpegArgs', () => {
@@ -61,15 +62,66 @@ describe('buildFfmpegArgs', () => {
 });
 
 describe('buildFfprobeArgs', () => {
-  it('asks only for the duration, in a parseable form', () => {
+  it('asks for duration, bitrate and the first video stream as json', () => {
     expect(buildFfprobeArgs('/tmp/in.mp4')).toEqual([
       '-v',
       'error',
+      '-select_streams',
+      'v:0',
       '-show_entries',
-      'format=duration',
-      '-of',
-      'default=noprint_wrappers=1:nokey=1',
+      'stream=codec_name,width,height,r_frame_rate:format=duration,bit_rate',
+      '-print_format',
+      'json',
       '/tmp/in.mp4',
     ]);
+  });
+});
+
+describe('parseFfprobeMetadata', () => {
+  const full = JSON.stringify({
+    streams: [{ codec_name: 'h264', width: 1920, height: 1080, r_frame_rate: '30000/1001' }],
+    format: { duration: '45.512', bit_rate: '8500000' },
+  });
+
+  it('reads every field of a well formed probe', () => {
+    expect(parseFfprobeMetadata(full)).toEqual({
+      durationMs: 45512,
+      codec: 'h264',
+      width: 1920,
+      height: 1080,
+      frameRate: 29.97,
+      bitrateBps: 8500000,
+    });
+  });
+
+  it('resolves the rational frame rate to two decimals', () => {
+    const output = JSON.stringify({
+      streams: [{ r_frame_rate: '24/1' }],
+      format: {},
+    });
+
+    expect(parseFfprobeMetadata(output).frameRate).toBe(24);
+  });
+
+  it('treats a zero denominator as unknown instead of dividing by it', () => {
+    const output = JSON.stringify({ streams: [{ r_frame_rate: '0/0' }], format: {} });
+
+    expect(parseFfprobeMetadata(output).frameRate).toBeNull();
+  });
+
+  it('returns nulls for a probe with no video stream rather than throwing', () => {
+    expect(parseFfprobeMetadata(JSON.stringify({ streams: [], format: {} }))).toEqual({
+      durationMs: 0,
+      codec: null,
+      width: null,
+      height: null,
+      frameRate: null,
+      bitrateBps: null,
+    });
+  });
+
+  it('survives output that is not json at all', () => {
+    expect(parseFfprobeMetadata('not json').durationMs).toBe(0);
+    expect(parseFfprobeMetadata('not json').codec).toBeNull();
   });
 });

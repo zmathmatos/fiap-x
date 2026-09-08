@@ -1,5 +1,6 @@
 import { escapeHtml } from './escape';
 import { renderLayout } from './layout';
+import type { EmailContent } from '../../domain/ports/mailer';
 
 export interface FailureEmailInput {
   originalName: string;
@@ -8,13 +9,7 @@ export interface FailureEmailInput {
   videoId: string;
 }
 
-export interface RenderedEmail {
-  subject: string;
-  text: string;
-  html: string;
-}
-
-export function renderFailureEmail(input: FailureEmailInput): RenderedEmail {
+export function renderFailureEmail(input: FailureEmailInput): EmailContent {
   const url = `${input.appUrl}/videos/${input.videoId}`;
 
   return {

@@ -1,4 +1,5 @@
-import { NotFoundError } from '@fiapx/shared';
+import { NotFoundError, type ProgressStore } from '@fiapx/shared';
+import { VideoStatus } from '../../domain/entities/video-status';
 import type { VideoRepository } from '../../domain/ports/video-repository';
 import {
   presentVideo,
@@ -17,7 +18,10 @@ export interface GetVideoOutput extends VideoView {
 }
 
 export class GetVideoUseCase {
-  constructor(private readonly videos: VideoRepository) {}
+  constructor(
+    private readonly videos: VideoRepository,
+    private readonly progress: ProgressStore,
+  ) {}
 
   async execute(input: GetVideoInput): Promise<GetVideoOutput> {
     const video = await this.videos.findByIdForUser(input.videoId, input.userId);
@@ -27,6 +31,14 @@ export class GetVideoUseCase {
     }
 
     const events = await this.videos.listEvents(video.id);
-    return { ...presentVideo(video), events: events.map(presentVideoEvent) };
+    const progressPercent =
+      video.status === VideoStatus.PROCESSING
+        ? ((await this.progress.read([video.id])).get(video.id) ?? null)
+        : null;
+
+    return {
+      ...presentVideo(video, progressPercent),
+      events: events.map(presentVideoEvent),
+    };
   }
 }

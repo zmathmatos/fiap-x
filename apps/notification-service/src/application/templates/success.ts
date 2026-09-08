@@ -1,6 +1,6 @@
 import { escapeHtml } from './escape';
 import { renderLayout } from './layout';
-import type { RenderedEmail } from './failure';
+import type { EmailContent } from '../../domain/ports/mailer';
 
 export interface SuccessEmailInput {
   originalName: string;
@@ -9,7 +9,7 @@ export interface SuccessEmailInput {
   videoId: string;
 }
 
-export function renderSuccessEmail(input: SuccessEmailInput): RenderedEmail {
+export function renderSuccessEmail(input: SuccessEmailInput): EmailContent {
   const url = `${input.appUrl}/videos/${input.videoId}`;
   const frames = `${input.frameCount} ${input.frameCount === 1 ? 'frame' : 'frames'}`;
 

@@ -1,5 +1,6 @@
-import type { NextFunction, Request, Response } from 'express';
-import { registry } from '../../../infrastructure/metrics/registry';
+import type { Request, RequestHandler, Response } from 'express';
+import { asyncHandler } from '../async-handler';
+import type { MetricsExporter } from '../../../application/ports/metrics';
 
 export interface HealthChecks {
   postgres(): Promise<boolean>;
@@ -9,7 +10,10 @@ export interface HealthChecks {
 }
 
 export class HealthController {
-  constructor(private readonly checks: HealthChecks) {}
+  constructor(
+    private readonly checks: HealthChecks,
+    private readonly metricsExporter: MetricsExporter,
+  ) {}
 
   /** Liveness: answers as long as the process is running. Never touches a dependency. */
   live = (_req: Request, res: Response): void => {
@@ -17,30 +21,22 @@ export class HealthController {
   };
 
   /** Readiness: only reports ready when every dependency answers. */
-  ready = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const [postgres, rabbitmq, storage, redis] = await Promise.all([
-        this.checks.postgres(),
-        this.checks.rabbitmq(),
-        this.checks.storage(),
-        this.checks.redis(),
-      ]);
+  ready: RequestHandler = asyncHandler(async (_req, res) => {
+    const [postgres, rabbitmq, storage, redis] = await Promise.all([
+      this.checks.postgres(),
+      this.checks.rabbitmq(),
+      this.checks.storage(),
+      this.checks.redis(),
+    ]);
 
-      const checks = { postgres, rabbitmq, storage, redis };
-      const healthy = Object.values(checks).every(Boolean);
+    const checks = { postgres, rabbitmq, storage, redis };
+    const healthy = Object.values(checks).every(Boolean);
 
-      res.status(healthy ? 200 : 503).json({ status: healthy ? 'ready' : 'degraded', checks });
-    } catch (error) {
-      next(error);
-    }
-  };
+    res.status(healthy ? 200 : 503).json({ status: healthy ? 'ready' : 'degraded', checks });
+  });
 
-  metrics = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      res.setHeader('Content-Type', registry.contentType);
-      res.status(200).send(await registry.metrics());
-    } catch (error) {
-      next(error);
-    }
-  };
+  metrics: RequestHandler = asyncHandler(async (_req, res) => {
+    res.setHeader('Content-Type', this.metricsExporter.contentType);
+    res.status(200).send(await this.metricsExporter.render());
+  });
 }

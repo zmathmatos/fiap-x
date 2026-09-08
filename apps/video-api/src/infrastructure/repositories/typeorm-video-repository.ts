@@ -44,7 +44,11 @@ export class TypeOrmVideoRepository implements VideoRepository {
       query.andWhere('video.status = :status', { status: filter.status });
     }
     if (filter.search) {
-      query.andWhere('video.original_name ILIKE :search', { search: `%${filter.search}%` });
+      // Both names: someone who renamed a video still remembers what the file was
+      // called, and someone who did not has only the file name to search by.
+      query.andWhere('(video.original_name ILIKE :search OR video.title ILIKE :search)', {
+        search: `%${filter.search}%`,
+      });
     }
 
     const [rows, total] = await query

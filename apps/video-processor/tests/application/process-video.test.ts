@@ -23,17 +23,38 @@ function makeDeps() {
     isHealthy: jest.fn(),
   };
 
+  const metadata = {
+    durationMs: 180_000,
+    codec: 'h264',
+    width: 1920,
+    height: 1080,
+    frameRate: 29.97,
+    bitrateBps: 8_500_000,
+  };
+
   const extractor = {
-    extract: jest.fn().mockResolvedValue({ frameCount: 9, durationMs: 180_000 }),
+    extract: jest.fn().mockResolvedValue({ frameCount: 9, metadata }),
   };
 
   const zipArchiver = { archive: jest.fn().mockReturnValue(Readable.from(['zip-bytes'])) };
   const publisher = { publish: jest.fn().mockResolvedValue(undefined) };
   const idempotency = { markProcessed: jest.fn().mockResolvedValue(true) };
+  const progress = { report: jest.fn().mockResolvedValue(undefined), read: jest.fn() };
   const workspace = {
-    create: jest.fn().mockResolvedValue({ root: '/tmp/job', inputPath: '/tmp/job/in.mp4', framesDir: '/tmp/job/frames' }),
+    create: jest.fn().mockResolvedValue({
+      root: '/tmp/job',
+      inputPath: '/tmp/job/in.mp4',
+      framesDir: '/tmp/job/frames',
+    }),
     saveStream: jest.fn().mockResolvedValue(undefined),
+    openStream: jest.fn().mockReturnValue(Readable.from(['jpeg-bytes'])),
     destroy: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const metrics = {
+    startTimer: jest.fn().mockReturnValue(jest.fn()),
+    videoProcessed: jest.fn(),
+    videoFailed: jest.fn(),
   };
 
   const useCase = new ProcessVideoUseCase({
@@ -42,12 +63,25 @@ function makeDeps() {
     zipArchiver,
     publisher,
     idempotency,
+    progress,
     workspace,
+    metrics,
     logger: createLogger('test'),
     config: { bucketRaw: 'fiapx-raw', bucketZips: 'fiapx-zips' },
   });
 
-  return { storage, extractor, zipArchiver, publisher, idempotency, workspace, useCase };
+  return {
+    storage,
+    extractor,
+    zipArchiver,
+    publisher,
+    idempotency,
+    progress,
+    workspace,
+    metrics,
+    useCase,
+    metadata,
+  };
 }
 
 describe('ProcessVideoUseCase', () => {
@@ -80,6 +114,12 @@ describe('ProcessVideoUseCase', () => {
         frameCount: 9,
         durationMs: 180_000,
         sizeBytes: 12_345,
+        codec: 'h264',
+        width: 1920,
+        height: 1080,
+        frameRate: 29.97,
+        bitrateBps: 8_500_000,
+        thumbnailKey: 'thumbs/u1/v1.jpg',
       },
       'corr-1',
     );
@@ -114,7 +154,17 @@ describe('ProcessVideoUseCase', () => {
 
   it('fails the video when no frame could be extracted', async () => {
     const { extractor, useCase } = makeDeps();
-    extractor.extract.mockResolvedValue({ frameCount: 0, durationMs: 1000 });
+    extractor.extract.mockResolvedValue({
+      frameCount: 0,
+      metadata: {
+        durationMs: 1000,
+        codec: null,
+        width: null,
+        height: null,
+        frameRate: null,
+        bitrateBps: null,
+      },
+    });
 
     await expect(useCase.execute(envelope)).rejects.toThrow(/nenhum frame/i);
   });
@@ -155,6 +205,97 @@ describe('ProcessVideoUseCase', () => {
 
     expect(extractor.extract).toHaveBeenCalledWith(
       expect.objectContaining({ frameIntervalSeconds: 5 }),
+    );
+  });
+
+  it('writes the percentages the extractor reports to the progress store', async () => {
+    const { extractor, progress, useCase } = makeDeps();
+    extractor.extract.mockImplementation(async (input: { onProgress?: (p: number) => void }) => {
+      input.onProgress?.(10);
+      input.onProgress?.(70);
+      return {
+        frameCount: 9,
+        metadata: {
+          durationMs: 1,
+          codec: null,
+          width: null,
+          height: null,
+          frameRate: null,
+          bitrateBps: null,
+        },
+      };
+    });
+
+    await useCase.execute(envelope);
+
+    expect(progress.report).toHaveBeenCalledWith('v1', 10);
+    expect(progress.report).toHaveBeenCalledWith('v1', 70);
+  });
+
+  it('finishes the video even when the progress store is unreachable', async () => {
+    const { extractor, progress, publisher, useCase } = makeDeps();
+    progress.report.mockRejectedValue(new Error('redis down'));
+    extractor.extract.mockImplementation(async (input: { onProgress?: (p: number) => void }) => {
+      input.onProgress?.(50);
+      return {
+        frameCount: 9,
+        metadata: {
+          durationMs: 1,
+          codec: null,
+          width: null,
+          height: null,
+          frameRate: null,
+          bitrateBps: null,
+        },
+      };
+    });
+
+    await useCase.execute(envelope);
+
+    expect(publisher.publish).toHaveBeenCalledWith(
+      'video.processed',
+      expect.objectContaining({ videoId: 'v1' }),
+      'corr-1',
+    );
+  });
+
+  it('keeps the first extracted frame as the poster and announces its key', async () => {
+    const { storage, workspace, publisher, useCase } = makeDeps();
+
+    await useCase.execute(envelope);
+
+    expect(workspace.openStream).toHaveBeenCalledWith('/tmp/job/frames/frame-00001.jpg');
+    expect(storage.putStream).toHaveBeenCalledWith(
+      'fiapx-zips',
+      'thumbs/u1/v1.jpg',
+      expect.anything(),
+      'image/jpeg',
+    );
+    expect(publisher.publish).toHaveBeenCalledWith(
+      'video.processed',
+      expect.objectContaining({ thumbnailKey: 'thumbs/u1/v1.jpg' }),
+      'corr-1',
+    );
+  });
+
+  it('still finishes the video when the poster cannot be stored', async () => {
+    const { storage, workspace, publisher, useCase } = makeDeps();
+    workspace.openStream.mockImplementation(() => {
+      throw new Error('frame missing');
+    });
+
+    await useCase.execute(envelope);
+
+    expect(publisher.publish).toHaveBeenCalledWith(
+      'video.processed',
+      expect.objectContaining({ thumbnailKey: null }),
+      'corr-1',
+    );
+    expect(storage.putStream).toHaveBeenCalledWith(
+      'fiapx-zips',
+      'zips/u1/v1.zip',
+      expect.anything(),
+      'application/zip',
     );
   });
 

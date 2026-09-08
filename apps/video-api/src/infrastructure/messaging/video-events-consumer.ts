@@ -1,9 +1,6 @@
 import { ROUTING_KEYS, type Logger, type RabbitConnection } from '@fiapx/shared';
 import type { ApplyProcessingEventUseCase } from '../../application/use-cases/apply-processing-event';
-import {
-  videosProcessedTotal,
-  videoProcessingFailuresTotal,
-} from '../metrics/registry';
+import { videosProcessedTotal, videoProcessingFailuresTotal } from '../metrics/registry';
 
 export const VIDEO_EVENTS_QUEUE = 'video-api.video-events';
 

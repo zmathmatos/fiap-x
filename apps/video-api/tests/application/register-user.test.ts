@@ -19,14 +19,15 @@ function makeUsers(overrides: Partial<jest.Mocked<UserRepository>> = {}) {
   return {
     findByEmail: jest.fn().mockResolvedValue(null),
     findById: jest.fn().mockResolvedValue(null),
-    create: jest.fn().mockImplementation(async (input) =>
-      new User({
-        id: 'u1',
-        name: input.name,
-        email: input.email,
-        passwordHash: input.passwordHash,
-        createdAt: new Date('2026-09-01T12:00:00Z'),
-      }),
+    create: jest.fn().mockImplementation(
+      async (input) =>
+        new User({
+          id: 'u1',
+          name: input.name,
+          email: input.email,
+          passwordHash: input.passwordHash,
+          createdAt: new Date('2026-09-01T12:00:00Z'),
+        }),
     ),
     ...overrides,
   } as unknown as jest.Mocked<UserRepository>;
@@ -56,9 +57,9 @@ describe('RegisterUserUseCase', () => {
   it('rejects a password shorter than 8 characters', async () => {
     const useCase = new RegisterUserUseCase(makeUsers(), hasher, tokens);
 
-    await expect(
-      useCase.execute({ name: 'A', email: 'a@b.c', password: 'short' }),
-    ).rejects.toThrow(ValidationError);
+    await expect(useCase.execute({ name: 'A', email: 'a@b.c', password: 'short' })).rejects.toThrow(
+      ValidationError,
+    );
   });
 
   it('rejects a malformed e-mail', async () => {

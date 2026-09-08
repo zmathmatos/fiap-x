@@ -1,25 +1,14 @@
-import {
-  ROUTING_KEYS,
-  type EventEnvelope,
-  type IdempotencyStore,
-  type Logger,
-  type VideoFailedPayload,
-} from '@fiapx/shared';
-import type { Mailer } from '../domain/ports/mailer';
+import { ROUTING_KEYS, type EventEnvelope, type VideoFailedPayload } from '@fiapx/shared';
 import { renderFailureEmail } from './templates/failure';
+import type { NotificationHandler, NotifyDeps } from './notification-handler';
 
-export interface NotifyDeps {
-  mailer: Mailer;
-  idempotency: IdempotencyStore;
-  config: { appUrl: string };
-  logger: Logger;
-}
+export class NotifyVideoFailedUseCase implements NotificationHandler {
+  readonly eventType = ROUTING_KEYS.VIDEO_FAILED;
 
-export class NotifyVideoFailedUseCase {
   constructor(private readonly deps: NotifyDeps) {}
 
   async execute(envelope: EventEnvelope<unknown>): Promise<void> {
-    if (envelope.eventType !== ROUTING_KEYS.VIDEO_FAILED) return;
+    if (envelope.eventType !== this.eventType) return;
 
     const payload = envelope.payload as VideoFailedPayload;
     if (!payload.userEmail) {
@@ -40,6 +29,7 @@ export class NotifyVideoFailedUseCase {
     // the retry ladder, so a temporary SMTP outage does not lose the notification.
     await this.deps.mailer.send({ to: payload.userEmail, ...mail });
 
+    this.deps.metrics.sent('failure');
     this.deps.logger.info(
       { videoId: payload.videoId, correlationId: envelope.correlationId },
       'failure e-mail sent',

@@ -1,16 +1,14 @@
-import {
-  ROUTING_KEYS,
-  type EventEnvelope,
-  type VideoProcessedPayload,
-} from '@fiapx/shared';
+import { ROUTING_KEYS, type EventEnvelope, type VideoProcessedPayload } from '@fiapx/shared';
 import { renderSuccessEmail } from './templates/success';
-import type { NotifyDeps } from './notify-video-failed';
+import type { NotificationHandler, NotifyDeps } from './notification-handler';
 
-export class NotifyVideoProcessedUseCase {
+export class NotifyVideoProcessedUseCase implements NotificationHandler {
+  readonly eventType = ROUTING_KEYS.VIDEO_PROCESSED;
+
   constructor(private readonly deps: NotifyDeps) {}
 
   async execute(envelope: EventEnvelope<unknown>): Promise<void> {
-    if (envelope.eventType !== ROUTING_KEYS.VIDEO_PROCESSED) return;
+    if (envelope.eventType !== this.eventType) return;
 
     const payload = envelope.payload as VideoProcessedPayload;
     if (!payload.userEmail) {
@@ -29,6 +27,7 @@ export class NotifyVideoProcessedUseCase {
 
     await this.deps.mailer.send({ to: payload.userEmail, ...mail });
 
+    this.deps.metrics.sent('success');
     this.deps.logger.info(
       { videoId: payload.videoId, correlationId: envelope.correlationId },
       'success e-mail sent',

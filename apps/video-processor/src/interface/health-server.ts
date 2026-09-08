@@ -1,11 +1,12 @@
 import express from 'express';
 import type { Server } from 'node:http';
 import type { Logger } from '@fiapx/shared';
-import { registry } from '../infrastructure/metrics';
+import type { MetricsExporter } from '../domain/ports/metrics-exporter';
 
 export interface HealthServerDeps {
   port: number;
   logger: Logger;
+  metrics: MetricsExporter;
   isReady(): boolean;
 }
 
@@ -26,8 +27,8 @@ export function startHealthServer(deps: HealthServerDeps): Server {
   });
 
   app.get('/metrics', (_req, res) => {
-    res.setHeader('Content-Type', registry.contentType);
-    void registry.metrics().then((body) => res.status(200).send(body));
+    res.setHeader('Content-Type', deps.metrics.contentType);
+    void deps.metrics.render().then((body) => res.status(200).send(body));
   });
 
   return app.listen(deps.port, () => {

@@ -1,13 +1,14 @@
-import busboy from 'busboy';
-import type { NextFunction, Request, Response } from 'express';
-import { PayloadTooLargeError, ValidationError } from '@fiapx/shared';
+import type { Request, RequestHandler, Response } from 'express';
+import { ValidationError } from '@fiapx/shared';
 import type { UploadVideoUseCase } from '../../../application/use-cases/upload-video';
 import type { ListVideosUseCase } from '../../../application/use-cases/list-videos';
 import type { GetVideoUseCase } from '../../../application/use-cases/get-video';
 import type { DownloadVideoZipUseCase } from '../../../application/use-cases/download-video-zip';
-import { presentVideo } from '../../../application/presenters/video-presenter';
-import type { Video } from '../../../domain/entities/video';
-import { videosUploadedTotal } from '../../../infrastructure/metrics/registry';
+import type { RenameVideoUseCase } from '../../../application/use-cases/rename-video';
+import type { GetVideoThumbnailUseCase } from '../../../application/use-cases/get-video-thumbnail';
+import { asyncHandler } from '../async-handler';
+import { readSingleUpload } from '../multipart-upload';
+import type { VideoMetrics } from '../../../application/ports/metrics';
 import { requireAuth } from '../middlewares/authenticate';
 
 export interface VideoControllerConfig {
@@ -19,6 +20,8 @@ export interface VideoUseCases {
   listVideos: ListVideosUseCase;
   getVideo: GetVideoUseCase;
   downloadVideoZip: DownloadVideoZipUseCase;
+  renameVideo: RenameVideoUseCase;
+  getVideoThumbnail: GetVideoThumbnailUseCase;
 }
 
 function readQueryString(value: unknown): string | undefined {
@@ -33,155 +36,119 @@ function readQueryNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function readTitle(body: unknown): string | null {
+  const raw = (body as { title?: unknown } | undefined)?.title;
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') {
+    throw new ValidationError('O nome deve ser um texto.');
+  }
+  return raw;
+}
+
 export class VideoController {
   constructor(
     private readonly useCases: VideoUseCases,
     private readonly config: VideoControllerConfig,
+    private readonly metrics: VideoMetrics,
   ) {}
 
-  /**
-   * Parses the multipart body with busboy and hands the file stream straight to
-   * the use case. Multer and friends buffer to disk first; that would double the
-   * I/O and put a 500 MB temp file on every API replica.
-   */
-  upload = (req: Request, res: Response, next: NextFunction): void => {
+  upload: RequestHandler = asyncHandler(async (req, res) => {
     const auth = requireAuth(req);
 
-    let parser: busboy.Busboy;
-    try {
-      parser = busboy({
-        headers: req.headers,
-        limits: { files: 1, fileSize: this.config.maxUploadBytes },
-      });
-    } catch {
-      next(new ValidationError('Envie o vídeo como multipart/form-data.'));
-      return;
-    }
-
-    const fields = new Map<string, string>();
-    let handled = false;
-    let pending: Promise<Video> | null = null;
-
-    const fail = (error: unknown): void => {
-      if (handled) return;
-      handled = true;
-      req.unpipe(parser);
-      next(error);
-    };
-
-    parser.on('field', (name, value) => fields.set(name, value));
-
-    parser.on('file', (_name, stream, info) => {
-      if (pending) {
-        stream.resume();
-        return;
-      }
-
-      stream.on('limit', () => {
-        const megabytes = Math.floor(this.config.maxUploadBytes / (1024 * 1024));
-        fail(new PayloadTooLargeError(`O arquivo excede o limite de ${megabytes} MB.`));
-      });
-
-      const rawInterval = fields.get('frameIntervalSeconds');
-      pending = this.useCases.uploadVideo.execute({
+    const video = await readSingleUpload(req, this.config, (file) => {
+      const rawInterval = file.fields.get('frameIntervalSeconds');
+      return this.useCases.uploadVideo.execute({
         userId: auth.userId,
         userEmail: auth.email,
-        originalName: info.filename,
-        mimeType: info.mimeType,
-        stream,
+        originalName: file.filename,
+        mimeType: file.mimeType,
+        stream: file.stream,
         correlationId: req.correlationId,
         frameIntervalSeconds: rawInterval === undefined ? undefined : Number(rawInterval),
-      });
-
-      pending.catch(() => {
-        // The use case can reject before it ever reads the stream — an unsupported
-        // extension is rejected on the first line. Nobody would consume the bytes
-        // then, busboy would never emit `close`, and the request would hang until
-        // the client gave up. Draining here lets the parser finish so the error
-        // handler can answer.
-        stream.resume();
+        title: file.fields.get('title'),
       });
     });
 
-    parser.on('error', fail);
+    this.metrics.uploadAccepted();
+    res.status(202).json(video);
+  });
 
-    parser.on('close', () => {
-      if (handled) return;
+  list: RequestHandler = asyncHandler(async (req, res) => {
+    const auth = requireAuth(req);
+    res.status(200).json(
+      await this.useCases.listVideos.execute({
+        userId: auth.userId,
+        status: readQueryString(req.query.status),
+        search: readQueryString(req.query.search),
+        page: readQueryNumber(req.query.page),
+        limit: readQueryNumber(req.query.limit),
+      }),
+    );
+  });
 
-      if (!pending) {
-        handled = true;
-        next(new ValidationError('Nenhum arquivo foi enviado no campo "file".'));
-        return;
-      }
-
-      pending
-        .then((video) => {
-          if (handled) return;
-          handled = true;
-          videosUploadedTotal.inc();
-          res.status(202).json(presentVideo(video));
-        })
-        .catch(fail);
-    });
-
-    req.pipe(parser);
-  };
-
-  list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const auth = requireAuth(req);
-      res.status(200).json(
-        await this.useCases.listVideos.execute({
-          userId: auth.userId,
-          status: readQueryString(req.query.status),
-          search: readQueryString(req.query.search),
-          page: readQueryNumber(req.query.page),
-          limit: readQueryNumber(req.query.limit),
-        }),
-      );
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  detail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const auth = requireAuth(req);
-      res.status(200).json(
-        await this.useCases.getVideo.execute({
-          userId: auth.userId,
-          videoId: String(req.params.id),
-        }),
-      );
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  download = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const auth = requireAuth(req);
-      const result = await this.useCases.downloadVideoZip.execute({
+  detail: RequestHandler = asyncHandler(async (req, res) => {
+    const auth = requireAuth(req);
+    res.status(200).json(
+      await this.useCases.getVideo.execute({
         userId: auth.userId,
         videoId: String(req.params.id),
-      });
+      }),
+    );
+  });
 
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Length', String(result.sizeBytes));
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${result.filename}"; filename*=UTF-8''${encodeURIComponent(result.filename)}`,
-      );
+  rename: RequestHandler = asyncHandler(async (req, res) => {
+    const auth = requireAuth(req);
+    res.status(200).json(
+      await this.useCases.renameVideo.execute({
+        userId: auth.userId,
+        videoId: String(req.params.id),
+        title: readTitle(req.body),
+      }),
+    );
+  });
 
-      // A storage failure mid-stream cannot become a JSON error: the status line is
-      // already on the wire, so destroy the response instead of trying to answer.
-      result.stream.on('error', (error) => {
-        req.log?.error({ err: error }, 'download stream failed');
-        res.destroy(error);
-      });
-      result.stream.pipe(res);
-    } catch (error) {
-      next(error);
-    }
-  };
+  thumbnail: RequestHandler = asyncHandler(async (req, res) => {
+    const auth = requireAuth(req);
+    const result = await this.useCases.getVideoThumbnail.execute({
+      userId: auth.userId,
+      videoId: String(req.params.id),
+    });
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Length', String(result.sizeBytes));
+    // The poster never changes once written, so it can be cached hard. Private
+    // because it is one user's frame, not a public asset.
+    res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
+
+    this.pipe(req, res, result.stream, 'thumbnail');
+  });
+
+  download: RequestHandler = asyncHandler(async (req, res) => {
+    const auth = requireAuth(req);
+    const result = await this.useCases.downloadVideoZip.execute({
+      userId: auth.userId,
+      videoId: String(req.params.id),
+    });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Length', String(result.sizeBytes));
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"; filename*=UTF-8''${encodeURIComponent(result.filename)}`,
+    );
+
+    this.pipe(req, res, result.stream, 'download');
+  });
+
+  /**
+   * A storage failure mid-stream cannot become a JSON error: the status line is
+   * already on the wire, so the response is destroyed instead of answered.
+   */
+  private pipe(req: Request, res: Response, stream: NodeJS.ReadableStream, what: string): void {
+    stream.on('error', (error: Error) => {
+      req.log?.error({ err: error }, `${what} stream failed`);
+      res.destroy(error);
+    });
+    stream.pipe(res);
+  }
 }

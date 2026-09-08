@@ -2,7 +2,11 @@ import request from 'supertest';
 import type { Express } from 'express';
 import { createLogger, UnauthorizedError } from '@fiapx/shared';
 import { buildApp } from '../../src/app';
-import { HealthController, type HealthChecks } from '../../src/interface/http/controllers/health-controller';
+import type { MetricsExporter } from '../../src/application/ports/metrics';
+import {
+  HealthController,
+  type HealthChecks,
+} from '../../src/interface/http/controllers/health-controller';
 import type { AuthController } from '../../src/interface/http/controllers/auth-controller';
 import type { VideoController } from '../../src/interface/http/controllers/video-controller';
 import type { TokenService } from '../../src/domain/ports/token-service';
@@ -13,6 +17,11 @@ const tokenService: TokenService = {
     if (token !== 'good-token') throw new UnauthorizedError('Sessão expirada ou inválida.');
     return { sub: 'u1', email: 'a@b.c' };
   },
+};
+
+const metricsExporter: MetricsExporter = {
+  contentType: 'text/plain',
+  render: async () => '# HELP videos_uploaded_total\nvideos_uploaded_total 0\n',
 };
 
 function makeApp(checkOverrides: Partial<HealthChecks> = {}): {
@@ -35,13 +44,15 @@ function makeApp(checkOverrides: Partial<HealthChecks> = {}): {
     logger: createLogger('test'),
     corsOrigin: '*',
     tokenService,
-    healthController: new HealthController(checks),
+    healthController: new HealthController(checks, metricsExporter),
     authController: { register: noop, login: noop, me: noop } as unknown as AuthController,
     videoController: {
       upload: noop,
       list: noop,
       detail: noop,
       download: noop,
+      rename: noop,
+      thumbnail: noop,
     } as unknown as VideoController,
   });
 

@@ -27,7 +27,9 @@ export function buildRoutes(deps: RouteDependencies): Router {
   router.post('/videos', protect, deps.videoController.upload);
   router.get('/videos', protect, deps.videoController.list);
   router.get('/videos/:id', protect, deps.videoController.detail);
+  router.patch('/videos/:id', protect, deps.videoController.rename);
   router.get('/videos/:id/download', protect, deps.videoController.download);
+  router.get('/videos/:id/thumbnail', protect, deps.videoController.thumbnail);
 
   return router;
 }

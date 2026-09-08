@@ -87,7 +87,7 @@ describe('UploadVideoUseCase', () => {
         videoId: video.id,
         userId: 'u1',
         userEmail: 'user@fiapx.local',
-        storageKey: video.storageKey,
+        storageKey: `raw/u1/${video.id}.mp4`,
         originalName: 'clip.mp4',
         frameIntervalSeconds: 20,
       },
@@ -151,5 +151,33 @@ describe('UploadVideoUseCase', () => {
     await expect(useCase.execute(makeInput({ originalName: 'noextension' }))).rejects.toThrow(
       ValidationError,
     );
+  });
+
+  it('accepts a title given at upload time and shows it instead of the file name', async () => {
+    const { useCase } = makeDeps();
+
+    const video = await useCase.execute(makeInput({ title: '  Aula 02  ' }));
+
+    expect(video.title).toBe('Aula 02');
+    expect(video.displayName).toBe('Aula 02');
+    expect(video.originalName).toBe('clip.mp4');
+  });
+
+  it('falls back to the file name when no title is given', async () => {
+    const { useCase } = makeDeps();
+
+    const video = await useCase.execute(makeInput());
+
+    expect(video.title).toBeNull();
+    expect(video.displayName).toBe('clip.mp4');
+  });
+
+  it('rejects a title too long for the column before touching storage', async () => {
+    const { storage, useCase } = makeDeps();
+
+    await expect(useCase.execute(makeInput({ title: 'a'.repeat(201) }))).rejects.toThrow(
+      ValidationError,
+    );
+    expect(storage.putStream).not.toHaveBeenCalled();
   });
 });

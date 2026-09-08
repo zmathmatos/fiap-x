@@ -1,10 +1,11 @@
+import type { MetricsExporter, VideoMetrics } from '../../application/ports/metrics';
 import { collectDefaultMetrics, Counter, Histogram, Registry } from 'prom-client';
 
-export const registry = new Registry();
+const registry = new Registry();
 
 collectDefaultMetrics({ register: registry, prefix: 'fiapx_api_' });
 
-export const videosUploadedTotal = new Counter({
+const videosUploadedTotal = new Counter({
   name: 'videos_uploaded_total',
   help: 'Vídeos aceitos para processamento',
   registers: [registry],
@@ -29,3 +30,12 @@ export const httpRequestDuration = new Histogram({
   buckets: [0.01, 0.05, 0.1, 0.3, 1, 3, 10],
   registers: [registry],
 });
+
+export const metricsExporter: MetricsExporter = {
+  contentType: registry.contentType,
+  render: () => registry.metrics(),
+};
+
+export const videoMetrics: VideoMetrics = {
+  uploadAccepted: () => videosUploadedTotal.inc(),
+};

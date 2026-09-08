@@ -52,6 +52,12 @@ export class ApplyProcessingEventUseCase {
           frameCount: processed.frameCount,
           durationMs: processed.durationMs,
           sizeBytes: processed.sizeBytes,
+          codec: processed.codec,
+          width: processed.width,
+          height: processed.height,
+          frameRate: processed.frameRate,
+          bitrateBps: processed.bitrateBps,
+          thumbnailKey: processed.thumbnailKey,
         });
         break;
       }

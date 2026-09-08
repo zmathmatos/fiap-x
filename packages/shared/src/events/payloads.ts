@@ -24,6 +24,14 @@ export interface VideoProcessedPayload {
   frameCount: number;
   durationMs: number;
   sizeBytes: number;
+  /** Probed from the source file. Null whenever the container does not carry it. */
+  codec: string | null;
+  width: number | null;
+  height: number | null;
+  frameRate: number | null;
+  bitrateBps: number | null;
+  /** Storage key of the first extracted frame, kept as the library poster. */
+  thumbnailKey: string | null;
 }
 
 export interface VideoFailedPayload {

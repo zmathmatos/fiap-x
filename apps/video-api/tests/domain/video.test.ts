@@ -1,4 +1,5 @@
 import { Video } from '../../src/domain/entities/video';
+import { VideoTitle } from '../../src/domain/value-objects/video-title';
 import { VideoStatus } from '../../src/domain/entities/video-status';
 
 function makeVideo(): Video {
@@ -40,6 +41,45 @@ describe('Video', () => {
     expect(video.durationMs).toBe(240_000);
     expect(video.sizeBytes).toBe(900);
     expect(video.isDownloadable()).toBe(true);
+  });
+
+  it('records the probed metadata when completed', () => {
+    const video = makeVideo();
+    video.markProcessing();
+
+    video.markCompleted({
+      zipKey: 'zips/u1/v1.zip',
+      frameCount: 12,
+      durationMs: 240_000,
+      sizeBytes: 900,
+      codec: 'h264',
+      width: 1920,
+      height: 1080,
+      frameRate: 29.97,
+      bitrateBps: 8_500_000,
+    });
+
+    expect(video.codec).toBe('h264');
+    expect(video.width).toBe(1920);
+    expect(video.height).toBe(1080);
+    expect(video.frameRate).toBe(29.97);
+    expect(video.bitrateBps).toBe(8_500_000);
+  });
+
+  it('leaves metadata null when the worker could not probe it', () => {
+    const video = makeVideo();
+    video.markProcessing();
+
+    video.markCompleted({
+      zipKey: 'z.zip',
+      frameCount: 1,
+      durationMs: 1,
+      sizeBytes: 1,
+    });
+
+    expect(video.codec).toBeNull();
+    expect(video.width).toBeNull();
+    expect(video.frameRate).toBeNull();
   });
 
   it('records the reason when failed', () => {
@@ -85,5 +125,52 @@ describe('Video', () => {
     video.markProcessing();
 
     expect(video.updatedAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('falls back to the file name when the video has no title', () => {
+    expect(makeVideo().displayName).toBe('clip.mp4');
+  });
+
+  it('shows the title once one is given', () => {
+    const video = makeVideo();
+
+    video.rename(VideoTitle.of('  Aula 02 — Introdução  '));
+
+    expect(video.title).toBe('Aula 02 — Introdução');
+    expect(video.displayName).toBe('Aula 02 — Introdução');
+  });
+
+  it('clearing the title falls back to the file name rather than leaving it blank', () => {
+    const video = makeVideo();
+    video.rename(VideoTitle.of('Alguma coisa'));
+
+    video.rename(VideoTitle.of('   '));
+
+    expect(video.title).toBeNull();
+    expect(video.displayName).toBe('clip.mp4');
+  });
+
+  it('renaming never disturbs the processing status', () => {
+    const video = makeVideo();
+    video.markProcessing();
+
+    video.rename(VideoTitle.of('Novo nome'));
+
+    expect(video.status).toBe(VideoStatus.PROCESSING);
+  });
+
+  it('records the thumbnail key when completed, so the library can show a frame', () => {
+    const video = makeVideo();
+    video.markProcessing();
+
+    video.markCompleted({
+      zipKey: 'z.zip',
+      frameCount: 4,
+      durationMs: 1,
+      sizeBytes: 1,
+      thumbnailKey: 'thumbs/u1/v1.jpg',
+    });
+
+    expect(video.thumbnailKey).toBe('thumbs/u1/v1.jpg');
   });
 });

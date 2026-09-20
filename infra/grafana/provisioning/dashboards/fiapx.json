@@ -186,6 +186,73 @@
         }
       ],
       "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "notification-service",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Notificações enviadas (sucesso)",
+      "description": "Fonte: notification-service (notifications_sent_total{kind=\"success\"})",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 39 },
+      "targets": [
+        { "expr": "sum(notifications_sent_total{kind=\"success\"})", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Notificações enviadas (falha)",
+      "description": "Fonte: notification-service (notifications_sent_total{kind=\"failure\"})",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 39 },
+      "targets": [
+        { "expr": "sum(notifications_sent_total{kind=\"failure\"})", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uso de CPU (notification-service)",
+      "description": "Fonte: notification-service (fiapx_notification_process_cpu_seconds_total)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
+      "targets": [
+        {
+          "expr": "sum(rate(fiapx_notification_process_cpu_seconds_total[5m])) * 100",
+          "legendFormat": "cpu",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uso de memória (notification-service)",
+      "description": "Fonte: notification-service (fiapx_notification_process_resident_memory_bytes)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
+      "targets": [
+        {
+          "expr": "sum(fiapx_notification_process_resident_memory_bytes)",
+          "legendFormat": "rss",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] }
     }
   ]
 }

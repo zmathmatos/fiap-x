@@ -8,23 +8,82 @@
   "time": { "from": "now-30m", "to": "now" },
   "panels": [
     {
+      "type": "row",
+      "title": "video-api",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
       "type": "stat",
       "title": "Vídeos recebidos",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "description": "Fonte: video-api (videos_uploaded_total)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
       "targets": [{ "expr": "sum(videos_uploaded_total)", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
     {
+      "type": "timeseries",
+      "title": "Latência HTTP da API (p95 por rota)",
+      "description": "Fonte: video-api (http_request_duration_seconds_bucket)",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 1 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uso de CPU (video-api)",
+      "description": "Fonte: video-api (fiapx_api_process_cpu_seconds_total)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "expr": "sum(rate(fiapx_api_process_cpu_seconds_total[5m])) * 100",
+          "legendFormat": "cpu",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uso de memória (video-api)",
+      "description": "Fonte: video-api (fiapx_api_process_resident_memory_bytes)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "expr": "sum(fiapx_api_process_resident_memory_bytes)",
+          "legendFormat": "rss",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "video-processor",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "panels": []
+    },
+    {
       "type": "stat",
       "title": "Vídeos concluídos",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "description": "Fonte: video-processor (videos_processed_total)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 18 },
       "targets": [{ "expr": "sum(videos_processed_total)", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
     {
       "type": "stat",
       "title": "Falhas",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "description": "Fonte: video-processor (video_processing_failures_total)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 18 },
       "targets": [{ "expr": "sum(video_processing_failures_total)", "refId": "A" }],
       "fieldConfig": {
         "defaults": {
@@ -43,14 +102,16 @@
     {
       "type": "stat",
       "title": "Frames extraídos",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "description": "Fonte: video-processor (frames_extracted_total)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 18 },
       "targets": [{ "expr": "sum(frames_extracted_total)", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
     {
       "type": "timeseries",
       "title": "Vazão de processamento (vídeos/min)",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "description": "Fonte: video-processor (videos_processed_total, video_processing_failures_total)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
       "targets": [
         {
           "expr": "sum(rate(videos_processed_total[5m])) * 60",
@@ -68,7 +129,8 @@
     {
       "type": "timeseries",
       "title": "Duração do processamento (p50 / p95)",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "description": "Fonte: video-processor (video_processing_duration_seconds)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(video_processing_duration_seconds_bucket[5m])) by (le))",
@@ -85,21 +147,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Latência HTTP da API (p95 por rota)",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))",
-          "legendFormat": "{{route}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
-    },
-    {
-      "type": "timeseries",
       "title": "Workers ativos",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "description": "Fonte: video-processor (up{job=\"video-processor\"})",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 30 },
       "targets": [
         {
           "expr": "count(up{job=\"video-processor\"} == 1)",
@@ -108,6 +158,34 @@
         }
       ],
       "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uso de CPU (video-processor)",
+      "description": "Fonte: video-processor (fiapx_processor_process_cpu_seconds_total)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 30 },
+      "targets": [
+        {
+          "expr": "sum(rate(fiapx_processor_process_cpu_seconds_total[5m])) by (instance) * 100",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uso de memória (video-processor)",
+      "description": "Fonte: video-processor (fiapx_processor_process_resident_memory_bytes)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 30 },
+      "targets": [
+        {
+          "expr": "fiapx_processor_process_resident_memory_bytes",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] }
     }
   ]
 }

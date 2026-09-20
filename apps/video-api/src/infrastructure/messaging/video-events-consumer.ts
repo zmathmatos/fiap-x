@@ -1,6 +1,5 @@
 import { ROUTING_KEYS, type Logger, type RabbitConnection } from '@fiapx/shared';
 import type { ApplyProcessingEventUseCase } from '../../application/use-cases/apply-processing-event';
-import { videosProcessedTotal, videoProcessingFailuresTotal } from '../metrics/registry';
 
 export const VIDEO_EVENTS_QUEUE = 'video-api.video-events';
 
@@ -29,9 +28,6 @@ export async function startVideoEventsConsumer(deps: VideoEventsConsumerDeps): P
     prefetch: 10,
     handler: async (envelope) => {
       await deps.applyProcessingEvent.execute(envelope);
-
-      if (envelope.eventType === ROUTING_KEYS.VIDEO_PROCESSED) videosProcessedTotal.inc();
-      if (envelope.eventType === ROUTING_KEYS.VIDEO_FAILED) videoProcessingFailuresTotal.inc();
     },
   });
 

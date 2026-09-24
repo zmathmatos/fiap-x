@@ -11,18 +11,6 @@ const videosUploadedTotal = new Counter({
   registers: [registry],
 });
 
-export const videosProcessedTotal = new Counter({
-  name: 'videos_processed_total',
-  help: 'Vídeos que concluíram o processamento',
-  registers: [registry],
-});
-
-export const videoProcessingFailuresTotal = new Counter({
-  name: 'video_processing_failures_total',
-  help: 'Vídeos que terminaram em falha',
-  registers: [registry],
-});
-
 export const httpRequestDuration = new Histogram({
   name: 'http_request_duration_seconds',
   help: 'Duração das requisições HTTP',

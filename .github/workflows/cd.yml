@@ -88,41 +88,14 @@ jobs:
             kind load docker-image "$image" --name fiapx-cd
           done
 
-      - name: Load backing-service images into kind
-        # Pulled once on the runner's own Docker daemon and side-loaded,
-        # instead of letting containerd inside the kind node pull them live.
-        # These are official multi-arch Docker Hub images, and the runner's
-        # containerd-backed Docker only materializes the host platform's
-        # layers on pull — but `kind load docker-image` always imports
-        # --all-platforms, so it goes looking for arch layers that were
-        # never fetched and fails. Saving/loading a single-platform archive
-        # sidesteps that: https://kind.sigs.k8s.io/docs/user/known-issues/
-        run: |
-          images=(
-            postgres:17-alpine
-            redis:7-alpine
-            rabbitmq:3.13-management-alpine
-            quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
-            quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z
-            mailhog/mailhog:v1.0.1
-          )
-          for image in "${images[@]}"; do
-            # --platform on the pull collapses the manifest list to a single
-            # concrete image locally, so save doesn't need --platform (and
-            # shouldn't: passing it there triggers a fresh registry manifest
-            # lookup, which is what was failing as "unauthorized").
-            docker pull --platform linux/amd64 "$image"
-            tar_file="$RUNNER_TEMP/$(echo "$image" | tr '/:' '__').tar"
-            docker image save -o "$tar_file" "$image"
-            kind load image-archive "$tar_file" --name fiapx-cd
-            rm -f "$tar_file"
-          done
-
       - name: Deploy backing services
+        # These are plain Kubernetes-managed pulls (kubelet -> containerd -> registry),
+        # not `docker save`/`kind load` — that path is a host-Docker-only quirk with
+        # multi-arch images and isn't what's used here, so it doesn't apply.
         run: kubectl apply -f infra/k8s/kind/dependencies.yaml
 
       - name: Wait for backing services
-        run: kubectl -n fiapx wait --for=condition=available deployment -l tier=dependency --timeout=180s
+        run: kubectl -n fiapx wait --for=condition=available deployment -l tier=dependency --timeout=300s
 
       - name: Apply application manifests pinned to this build
         run: |

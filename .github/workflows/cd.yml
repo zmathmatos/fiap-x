@@ -54,36 +54,74 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
   deploy:
-    name: deploy to kubernetes
+    name: deploy smoke test (kind)
     runs-on: ubuntu-latest
     needs: [publish]
-    environment: production
-    # Requires a KUBE_CONFIG secret. Without a cluster configured the job is a
-    # no-op instead of a red build.
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # We don't operate a real cluster, so this doesn't ship anywhere. It spins
+    # up an ephemeral kind cluster, deploys throwaway stand-ins for Postgres/
+    # Redis/RabbitMQ/MinIO/MailHog (infra/k8s/kind/dependencies.yaml), and
+    # applies the real infra/k8s manifests pinned to this build's images. That
+    # proves the manifests apply, migrations run, and every rollout reaches
+    # Ready — catching the kind of breakage a real deploy would hit, without
+    # needing production credentials.
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure kubectl
-        run: |
-          mkdir -p "$HOME/.kube"
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: fiapx-cd
+          wait: 60s
 
-      - name: Apply manifests
-        run: kubectl apply -k infra/k8s
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load this build's images into kind
+        run: |
+          for app in video-api video-processor notification web; do
+            image="ghcr.io/${{ github.repository_owner }}/fiapx-$app:${{ github.sha }}"
+            docker pull "$image"
+            kind load docker-image "$image" --name fiapx-cd
+          done
+
+      - name: Deploy backing services
+        run: kubectl apply -f infra/k8s/kind/dependencies.yaml
+
+      - name: Wait for backing services
+        run: kubectl -n fiapx wait --for=condition=available deployment -l tier=dependency --timeout=180s
+
+      - name: Apply application manifests pinned to this build
+        run: |
+          # kustomize refuses absolute/outside-root resource paths, so the
+          # overlay has to live inside the checkout, as a sibling of infra/
+          # (not nested under infra/k8s itself, which kustomize treats as a
+          # cycle when the overlay resource points back at its own ancestor).
+          overlay="$GITHUB_WORKSPACE/.kind-overlay"
+          mkdir -p "$overlay"
+          cat > "$overlay/kustomization.yaml" <<EOF
+          resources:
+            - ../infra/k8s
+          images:
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-video-api
+              newTag: '${{ github.sha }}'
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-video-processor
+              newTag: '${{ github.sha }}'
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-notification
+              newTag: '${{ github.sha }}'
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-web
+              newTag: '${{ github.sha }}'
+          EOF
+          kubectl apply -k "$overlay"
 
       - name: Run migrations
-        run: |
-          kubectl -n fiapx delete job video-api-migrate --ignore-not-found
-          kubectl apply -f infra/k8s/video-api.yaml
-          kubectl -n fiapx wait --for=condition=complete job/video-api-migrate --timeout=300s
+        run: kubectl -n fiapx wait --for=condition=complete job/video-api-migrate --timeout=180s
 
       - name: Roll out services
         run: |
           for deployment in video-api video-processor notification web; do
-            kubectl -n fiapx set image "deployment/$deployment" \
-              "$deployment=ghcr.io/${{ github.repository_owner }}/fiapx-$deployment:${{ github.sha }}" \
-              || true
-            kubectl -n fiapx rollout status "deployment/$deployment" --timeout=300s
+            kubectl -n fiapx rollout status "deployment/$deployment" --timeout=180s
           done

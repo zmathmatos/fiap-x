@@ -1,0 +1,404 @@
+{
+  "info": {
+    "_postman_id": "3a9f9b6e-2f2b-4b4a-9d3a-fiapx-api-collection",
+    "name": "FIAP X",
+    "description": "Coleção da API do FIAP X — plataforma que recebe vídeos, extrai frames de forma assíncrona e devolve um `.zip`.\n\nCada pasta representa um serviço com superfície HTTP própria:\n\n- **Video API** — a única API de domínio da plataforma (autenticação e gestão de vídeos).\n- **Video Processor** — worker RabbitMQ; expõe apenas `/health`, `/health/ready` e `/metrics` para o Kubernetes e o Prometheus.\n- **Notification Service** — worker RabbitMQ; expõe apenas `/health`, `/health/ready` e `/metrics` pelos mesmos motivos.\n\nPara rodar localmente: `cp env.example .env && make up` (ver README na raiz do repositório). Depois de registrar ou logar, o token é salvo automaticamente na variável de coleção `authToken` e usado pelas demais requisições da Video API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "videoApiBaseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "videoProcessorBaseUrl", "value": "http://localhost:9100", "type": "string" },
+    { "key": "notificationServiceBaseUrl", "value": "http://localhost:9101", "type": "string" },
+    { "key": "authToken", "value": "", "type": "string" },
+    { "key": "videoId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Video API",
+      "description": "Único serviço com API de domínio. Autenticação via JWT (Bearer) e gestão do ciclo de vida dos vídeos (upload, listagem, detalhe, renomear, download do `.zip` de frames e thumbnail).",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Registrar usuário",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"password\": \"senha-forte-123\"\n}"
+                },
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/auth/register",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["auth", "register"]
+                },
+                "description": "Cria um usuário e devolve o token de acesso. `password` precisa de ao menos 8 caracteres. Responde `201` com `{ user, token }`, ou `400` se o e-mail já estiver cadastrado."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "    const body = pm.response.json();",
+                      "    pm.collectionVariables.set('authToken', body.token);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Login",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"ada@example.com\",\n  \"password\": \"senha-forte-123\"\n}"
+                },
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/auth/login",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["auth", "login"]
+                },
+                "description": "Autentica um usuário existente. Responde `200` com `{ user, token }`, ou `401` se as credenciais forem inválidas."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "    const body = pm.response.json();",
+                      "    pm.collectionVariables.set('authToken', body.token);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Usuário autenticado",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/me",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["me"]
+                },
+                "description": "Devolve os dados do usuário do token enviado em `Authorization: Bearer`. Responde `200` com `{ id, name, email, createdAt }`, ou `401` sem token válido."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Videos",
+          "item": [
+            {
+              "name": "Enviar vídeo",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "title", "value": "Aula 01", "type": "text", "description": "Opcional. Nome exibido na biblioteca; se omitido, usa o nome do arquivo." },
+                    { "key": "frameIntervalSeconds", "value": "20", "type": "text", "description": "Opcional (padrão do servidor). Inteiro entre 1 e 3600 segundos." },
+                    { "key": "file", "type": "file", "src": "", "description": "Obrigatório. Formatos aceitos: mp4, mov, avi, mkv, webm." }
+                  ]
+                },
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/videos",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["videos"]
+                },
+                "description": "Envia o vídeo como `multipart/form-data` (o corpo é transmitido direto para o object storage, sem buffer em disco). O processamento é assíncrono via RabbitMQ. Responde `202` com o vídeo em status `PENDING`, `400` para formato/campos inválidos, ou `413` se exceder `MAX_UPLOAD_BYTES` (500 MB por padrão)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 202) {",
+                      "    const body = pm.response.json();",
+                      "    pm.collectionVariables.set('videoId', body.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "response": []
+            },
+            {
+              "name": "Listar vídeos",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/videos?status=&search=&page=1&limit=20",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["videos"],
+                  "query": [
+                    { "key": "status", "value": "", "description": "Opcional: PENDING, PROCESSING, DONE ou FAILED." },
+                    { "key": "search", "value": "", "description": "Opcional: busca por nome/título." },
+                    { "key": "page", "value": "1", "description": "Opcional, padrão 1." },
+                    { "key": "limit", "value": "20", "description": "Opcional, padrão 20, máximo 100." }
+                  ]
+                },
+                "description": "Lista os vídeos do usuário autenticado, paginados. Responde `200` com `{ items, total, page, limit }`."
+              },
+              "response": []
+            },
+            {
+              "name": "Detalhe do vídeo",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/videos/{{videoId}}",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["videos", "{{videoId}}"]
+                },
+                "description": "Detalhe de um vídeo do usuário autenticado, incluindo progresso de processamento quando aplicável. Responde `200`, ou `404` se o vídeo não existir ou pertencer a outro usuário."
+              },
+              "response": []
+            },
+            {
+              "name": "Renomear vídeo",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }]
+                },
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Novo nome do vídeo\"\n}"
+                },
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/videos/{{videoId}}",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["videos", "{{videoId}}"]
+                },
+                "description": "Define o título exibido do vídeo (o nome do arquivo original nunca muda). Envie `title: null` para limpar o título e voltar a exibir o nome do arquivo. Responde `200` com o vídeo atualizado, ou `404` se não existir/pertencer a outro usuário."
+              },
+              "response": []
+            },
+            {
+              "name": "Baixar frames (.zip)",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/videos/{{videoId}}/download",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["videos", "{{videoId}}", "download"]
+                },
+                "description": "Faz stream do `.zip` com os frames extraídos. Só está disponível quando o vídeo terminou de processar (`downloadable: true`). Responde `200` com `application/zip`, ou `404`."
+              },
+              "response": []
+            },
+            {
+              "name": "Thumbnail do vídeo",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{authToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/videos/{{videoId}}/thumbnail",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["videos", "{{videoId}}", "thumbnail"]
+                },
+                "description": "Faz stream do frame de capa em `image/jpeg`. Disponível apenas depois que o processamento gera o thumbnail (`thumbnailUrl` não nulo no vídeo). Responde `200`, ou `404`."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Health",
+          "item": [
+            {
+              "name": "Liveness",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/health",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["health"]
+                },
+                "description": "Responde `200` enquanto o processo estiver rodando. Nunca consulta dependências externas."
+              },
+              "response": []
+            },
+            {
+              "name": "Readiness",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/health/ready",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["health", "ready"]
+                },
+                "description": "Checa Postgres, RabbitMQ, object storage e Redis. Responde `200` com `{ status: \"ready\", checks }` se todas estiverem saudáveis, ou `503` com `status: \"degraded\"`."
+              },
+              "response": []
+            },
+            {
+              "name": "Métricas Prometheus",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{videoApiBaseUrl}}/metrics",
+                  "host": ["{{videoApiBaseUrl}}"],
+                  "path": ["metrics"]
+                },
+                "description": "Métricas no formato de texto do Prometheus."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Video Processor",
+      "description": "Worker que consome eventos de upload no RabbitMQ, extrai frames com ffmpeg e gera o `.zip`. Não tem API de domínio — a única superfície HTTP é para o Kubernetes (liveness/readiness) e o Prometheus (métricas).",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{videoProcessorBaseUrl}}/health",
+              "host": ["{{videoProcessorBaseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Responde `200` com `{ status: \"ok\" }` enquanto o processo estiver rodando."
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{videoProcessorBaseUrl}}/health/ready",
+              "host": ["{{videoProcessorBaseUrl}}"],
+              "path": ["health", "ready"]
+            },
+            "description": "Responde `200` com `{ status: \"ready\" }` quando o worker está pronto para consumir mensagens, ou `503` com `{ status: \"degraded\" }`."
+          },
+          "response": []
+        },
+        {
+          "name": "Métricas Prometheus",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{videoProcessorBaseUrl}}/metrics",
+              "host": ["{{videoProcessorBaseUrl}}"],
+              "path": ["metrics"]
+            },
+            "description": "Métricas no formato de texto do Prometheus (tempo de processamento, sucesso/falha, etc.)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification Service",
+      "description": "Worker que consome eventos de processamento no RabbitMQ e envia e-mails de sucesso/falha. Não tem API de domínio — a única superfície HTTP é para o Kubernetes (liveness/readiness) e o Prometheus (métricas).",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notificationServiceBaseUrl}}/health",
+              "host": ["{{notificationServiceBaseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Responde `200` com `{ status: \"ok\" }` enquanto o processo estiver rodando."
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notificationServiceBaseUrl}}/health/ready",
+              "host": ["{{notificationServiceBaseUrl}}"],
+              "path": ["health", "ready"]
+            },
+            "description": "Responde `200` com `{ status: \"ready\" }` quando o worker está pronto para consumir mensagens, ou `503` com `{ status: \"degraded\" }`."
+          },
+          "response": []
+        },
+        {
+          "name": "Métricas Prometheus",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notificationServiceBaseUrl}}/metrics",
+              "host": ["{{notificationServiceBaseUrl}}"],
+              "path": ["metrics"]
+            },
+            "description": "Métricas no formato de texto do Prometheus (e-mails enviados/falhos, etc.)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -88,6 +88,26 @@ jobs:
             kind load docker-image "$image" --name fiapx-cd
           done
 
+      - name: Load backing-service images into kind
+        # Pulled once on the runner's own Docker daemon and side-loaded, same
+        # as the app images above, instead of letting containerd inside the
+        # kind node pull them live — that path is what was timing out
+        # (postgres/redis/rabbitmq/minio, all pulled fresh from Docker
+        # Hub/quay.io, hit registry throttling on shared runner IPs).
+        run: |
+          images=(
+            postgres:17-alpine
+            redis:7-alpine
+            rabbitmq:3.13-management-alpine
+            quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
+            quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z
+            mailhog/mailhog:v1.0.1
+          )
+          for image in "${images[@]}"; do
+            docker pull "$image"
+            kind load docker-image "$image" --name fiapx-cd
+          done
+
       - name: Deploy backing services
         run: kubectl apply -f infra/k8s/kind/dependencies.yaml
 
@@ -124,4 +144,18 @@ jobs:
         run: |
           for deployment in video-api video-processor notification web; do
             kubectl -n fiapx rollout status "deployment/$deployment" --timeout=180s
+          done
+
+      - name: Dump cluster state
+        if: failure()
+        run: |
+          kubectl -n fiapx get all
+          kubectl -n fiapx get events --sort-by=.lastTimestamp
+          for pod in $(kubectl -n fiapx get pods -o name); do
+            echo "::group::describe $pod"
+            kubectl -n fiapx describe "$pod"
+            echo "::endgroup::"
+            echo "::group::logs $pod"
+            kubectl -n fiapx logs "$pod" --all-containers --prefix --tail=200 || true
+            echo "::endgroup::"
           done

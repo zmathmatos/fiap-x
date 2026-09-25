@@ -107,9 +107,13 @@ jobs:
             mailhog/mailhog:v1.0.1
           )
           for image in "${images[@]}"; do
+            # --platform on the pull collapses the manifest list to a single
+            # concrete image locally, so save doesn't need --platform (and
+            # shouldn't: passing it there triggers a fresh registry manifest
+            # lookup, which is what was failing as "unauthorized").
             docker pull --platform linux/amd64 "$image"
             tar_file="$RUNNER_TEMP/$(echo "$image" | tr '/:' '__').tar"
-            docker image save --platform linux/amd64 -o "$tar_file" "$image"
+            docker image save -o "$tar_file" "$image"
             kind load image-archive "$tar_file" --name fiapx-cd
             rm -f "$tar_file"
           done

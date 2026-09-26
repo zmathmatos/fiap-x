@@ -70,8 +70,18 @@ jobs:
       - name: Integration tests
         run: npm run test:integration -w @fiapx/video-api
 
+      - name: ffmpeg (BDD fixtures)
+        run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
+      - name: Start environment
+        run: make up
+
       - name: BDD scenarios
         run: npm run test:bdd -w @fiapx/video-api
+
+      - name: Stop environment
+        if: always()
+        run: make down
 
   images:
     name: build images

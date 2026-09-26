@@ -3,8 +3,12 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .PHONY: up down logs ps scale rebuild test lint build clean
 
 ## Sobe o ambiente completo (leva alguns minutos no primeiro build)
+## --wait bloqueia até os healthchecks passarem, então quem chamar "make up"
+## só recebe o controle de volta com a fila do notification-service já
+## declarada — sem isso, um evento video.failed publicado cedo demais é
+## perdido (RabbitMQ não retém mensagens de uma binding que ainda não existe).
 up:
-	$(COMPOSE) up -d --build
+	$(COMPOSE) up -d --build --wait --wait-timeout 180
 
 ## Derruba tudo e apaga os volumes
 down:

@@ -25,7 +25,7 @@ make up                  # sobe tudo (o primeiro build leva alguns minutos)
 | API                       | http://localhost:3000  | —                              |
 | Caixa de e-mail (MailHog) | http://localhost:8025  | —                              |
 | RabbitMQ                  | http://localhost:15672 | `fiapx` / `fiapx`              |
-| MinIO                     | http://localhost:9001  | `fiapx` / `fiapx-secret`       |
+| Storage (S3Mock)          | http://localhost:9000  | sem autenticação (só dev/teste)|
 | Grafana                   | http://localhost:3001  | acesso anônimo liberado        |
 | Prometheus                | http://localhost:9090  | —                              |
 
@@ -45,14 +45,14 @@ make down     # derruba tudo e apaga os volumes
 ```
 [web React/Vite] ──HTTPS(JWT)──► [video-api] ──► PostgreSQL (schema video)
                                      │      ──► Redis (idempotência)
-                                     │      ──► MinIO (bucket raw)
+                                     │      ──► S3Mock (bucket raw)
                                      │ publica video.uploaded
                                      ▼
               ╔═ RabbitMQ · topic exchange "video-events" (durable) ═╗
                      │                                    │
                      ▼                                    ▼
           [video-processor × N]                  [notification-service]
-          ffmpeg → frames → zip → MinIO           e-mail de falha/sucesso
+          ffmpeg → frames → zip → S3Mock          e-mail de falha/sucesso
           publica processing.started,
                   processed | failed
                      │
@@ -168,7 +168,7 @@ Todas as variáveis estão documentadas em [`env.example`](env.example). As que 
 | `JWT_SECRET`             | —           | Obrigatória. Assina os tokens                                        |
 | `MAX_UPLOAD_BYTES`       | `524288000` | Limite por arquivo (500 MB)                                          |
 | `FRAME_INTERVAL_SECONDS` | `20`        | Intervalo padrão entre frames; o usuário pode sobrescrever no upload |
-| `STORAGE_ENDPOINT`       | MinIO local | Aponte para o S3 em produção e nada mais muda                        |
+| `STORAGE_ENDPOINT`       | S3Mock local | Aponte para o S3 em produção e nada mais muda                       |
 | `PROCESSOR_PREFETCH`     | `1`         | Um vídeo por réplica: ffmpeg já satura a CPU disponível              |
 
 > No Compose local a API conecta ao Postgres com o usuário `fiapx` (dono do banco) para simplificar

@@ -100,6 +100,9 @@ registradas em [`docs/adr/`](docs/adr).
 Todas as rotas de vídeo são escopadas pelo usuário do token. Um vídeo de outra conta responde
 `404`, nunca `403` — assim a resposta não confirma que o id existe.
 
+Coleção Postman com todas as rotas (Video API, video-processor e notification-service) em
+[`docs/postman/`](docs/postman/README.md).
+
 Exemplo:
 
 ```bash

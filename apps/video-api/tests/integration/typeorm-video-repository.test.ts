@@ -43,6 +43,11 @@ beforeAll(async () => {
   });
 
   await dataSource.initialize();
+  // TypeORM creates its own migrations-tracking table in the target schema
+  // before running any migration, so the schema must exist beforehand. In
+  // docker-compose this is done by infra/db/init.sql; a bare testcontainer
+  // has no such init script.
+  await dataSource.query('CREATE SCHEMA IF NOT EXISTS video');
   await dataSource.runMigrations();
 
   videos = new TypeOrmVideoRepository(dataSource);

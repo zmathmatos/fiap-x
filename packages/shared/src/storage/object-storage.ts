@@ -53,7 +53,7 @@ function isNotFound(error: unknown): boolean {
 }
 
 /**
- * S3-compatible storage. Points at MinIO in development and at S3 in production —
+ * S3-compatible storage. Points at S3Mock in development and at S3 in production —
  * only the endpoint and credentials change, never the code.
  */
 export function createObjectStorage(config: StorageConfig): ObjectStorage {
@@ -64,7 +64,7 @@ export function createObjectStorage(config: StorageConfig): ObjectStorage {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
-    // MinIO serves buckets as a path segment rather than a subdomain.
+    // S3Mock serves buckets as a path segment rather than a subdomain.
     forcePathStyle: config.forcePathStyle ?? false,
   });
 

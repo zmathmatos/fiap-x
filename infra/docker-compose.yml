@@ -1,7 +1,7 @@
 name: fiapx
 
 x-storage-env: &storage-env
-  STORAGE_ENDPOINT: http://minio:9000
+  STORAGE_ENDPOINT: http://s3mock:9090
   STORAGE_REGION: us-east-1
   STORAGE_ACCESS_KEY: fiapx
   STORAGE_SECRET_KEY: fiapx-secret
@@ -59,36 +59,19 @@ services:
       timeout: 10s
       retries: 12
 
-  minio:
-    image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
-    command: ['server', '/data', '--console-address', ':9001']
+  # S3-compatible test double. MinIO's Docker Hub / quay.io images now require
+  # an authenticated pull (all tags, including :latest), which broke `make up`
+  # and CI outright. S3Mock stays freely pullable and creates both buckets on
+  # boot, so there is no separate init container needed.
+  s3mock:
+    image: adobe/s3mock:5.2.3
     environment:
-      MINIO_ROOT_USER: fiapx
-      MINIO_ROOT_PASSWORD: fiapx-secret
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: fiapx-raw,fiapx-zips
     volumes:
-      - minio-data:/data
+      - s3mock-data:/s3mockroot
     ports:
-      - '9000:9000'
-      - '9001:9001' # console: fiapx / fiapx-secret
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 5s
-      timeout: 5s
-      retries: 12
-
-  minio-init:
-    image: quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 fiapx fiapx-secret &&
-      mc mb --ignore-existing local/fiapx-raw &&
-      mc mb --ignore-existing local/fiapx-zips &&
-      echo 'buckets prontos'
-      "
-    restart: 'no'
+      - '9000:9090' # host 9090 is taken by prometheus
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
@@ -138,8 +121,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      s3mock:
+        condition: service_started
       migrate:
         condition: service_completed_successfully
     environment:
@@ -181,8 +164,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      s3mock:
+        condition: service_started
     environment:
       NODE_ENV: production
       LOG_LEVEL: info
@@ -264,6 +247,6 @@ volumes:
   postgres-data:
   redis-data:
   rabbitmq-data:
-  minio-data:
+  s3mock-data:
   prometheus-data:
   grafana-data:

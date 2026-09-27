@@ -1,26 +1,14 @@
 # Backing services for the CD kind smoke test only. Not part of the production
 # kustomization (infra/k8s/kustomization.yaml) — real environments point at
-# managed Postgres/Redis/RabbitMQ/S3/SMTP instead. Credentials here are
-# throwaway: the cluster that uses them is created and destroyed within a
-# single CI job.
+# managed Postgres/Redis/RabbitMQ/S3/SMTP instead.
+#
+# Nothing here carries a credential: the workflow generates them and creates the
+# `fiapx-secrets` Secret before applying this file, and every service below reads
+# its own from there. The cluster is destroyed within the same CI job.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: fiapx
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: fiapx-secrets
-  namespace: fiapx
-type: Opaque
-stringData:
-  JWT_SECRET: kind-smoke-test-secret
-  DB_USER: fiapx
-  DB_PASSWORD: fiapx
-  RABBITMQ_URL: amqp://fiapx:fiapx@rabbitmq:5672
-  STORAGE_ACCESS_KEY: fiapx
-  STORAGE_SECRET_KEY: fiapx-secret
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -41,13 +29,17 @@ spec:
           image: postgres:17-alpine
           env:
             - { name: POSTGRES_DB, value: fiapx }
-            - { name: POSTGRES_USER, value: fiapx }
-            - { name: POSTGRES_PASSWORD, value: fiapx }
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: DB_USER }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: DB_PASSWORD }
           ports:
             - { name: db, containerPort: 5432 }
           readinessProbe:
             exec:
-              command: ['pg_isready', '-U', 'fiapx', '-d', 'fiapx']
+              command: ['sh', '-c', 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
             initialDelaySeconds: 5
             periodSeconds: 5
 ---
@@ -114,8 +106,12 @@ spec:
         - name: rabbitmq
           image: rabbitmq:3.13-management-alpine
           env:
-            - { name: RABBITMQ_DEFAULT_USER, value: fiapx }
-            - { name: RABBITMQ_DEFAULT_PASS, value: fiapx }
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: RABBITMQ_USER }
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: RABBITMQ_PASSWORD }
           ports:
             - { name: amqp, containerPort: 5672 }
           readinessProbe:
@@ -154,8 +150,12 @@ spec:
           image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
           command: ['server', '/data', '--console-address', ':9001']
           env:
-            - { name: MINIO_ROOT_USER, value: fiapx }
-            - { name: MINIO_ROOT_PASSWORD, value: fiapx-secret }
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: STORAGE_ACCESS_KEY }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: STORAGE_SECRET_KEY }
           ports:
             - { name: api, containerPort: 9000 }
           readinessProbe:
@@ -186,11 +186,18 @@ spec:
       containers:
         - name: mc
           image: quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z
+          env:
+            - name: STORAGE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: STORAGE_ACCESS_KEY }
+            - name: STORAGE_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: fiapx-secrets, key: STORAGE_SECRET_KEY }
           command:
             - /bin/sh
             - -c
             - >-
-              mc alias set local http://minio:9000 fiapx fiapx-secret &&
+              mc alias set local http://minio:9000 "$STORAGE_ACCESS_KEY" "$STORAGE_SECRET_KEY" &&
               mc mb --ignore-existing local/fiapx-raw &&
               mc mb --ignore-existing local/fiapx-zips
 ---

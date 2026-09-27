@@ -88,6 +88,24 @@ jobs:
             kind load docker-image "$image" --name fiapx-cd
           done
 
+      - name: Generate throwaway credentials
+        # Nothing in the repository carries a password. The values live only in this
+        # job's cluster, which is destroyed with the runner.
+        run: |
+          kubectl create namespace fiapx --dry-run=client -o yaml | kubectl apply -f -
+
+          rabbitmq_password="$(openssl rand -hex 24)"
+
+          kubectl -n fiapx create secret generic fiapx-secrets \
+            --from-literal=JWT_SECRET="$(openssl rand -base64 48)" \
+            --from-literal=DB_USER=fiapx \
+            --from-literal=DB_PASSWORD="$(openssl rand -hex 24)" \
+            --from-literal=RABBITMQ_USER=fiapx \
+            --from-literal=RABBITMQ_PASSWORD="$rabbitmq_password" \
+            --from-literal=RABBITMQ_URL="amqp://fiapx:$rabbitmq_password@rabbitmq:5672" \
+            --from-literal=STORAGE_ACCESS_KEY=fiapx \
+            --from-literal=STORAGE_SECRET_KEY="$(openssl rand -hex 24)"
+
       - name: Deploy backing services
         # These are plain Kubernetes-managed pulls (kubelet -> containerd -> registry),
         # not `docker save`/`kind load` — that path is a host-Docker-only quirk with

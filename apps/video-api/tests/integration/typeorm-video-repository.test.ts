@@ -1,6 +1,7 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import type { DataSource } from 'typeorm';
 import { createDataSource } from '../../src/infrastructure/database/data-source';
+import { runMigrations } from '../../src/infrastructure/database/migrate';
 import { TypeOrmVideoRepository } from '../../src/infrastructure/repositories/typeorm-video-repository';
 import { TypeOrmUserRepository } from '../../src/infrastructure/repositories/typeorm-user-repository';
 import { Video } from '../../src/domain/entities/video';
@@ -43,12 +44,7 @@ beforeAll(async () => {
   });
 
   await dataSource.initialize();
-  // TypeORM creates its own migrations-tracking table in the target schema
-  // before running any migration, so the schema must exist beforehand. In
-  // docker-compose this is done by infra/db/init.sql; a bare testcontainer
-  // has no such init script.
-  await dataSource.query('CREATE SCHEMA IF NOT EXISTS video');
-  await dataSource.runMigrations();
+  await runMigrations(dataSource, 'video');
 
   videos = new TypeOrmVideoRepository(dataSource);
   users = new TypeOrmUserRepository(dataSource);

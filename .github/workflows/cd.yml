@@ -126,6 +126,27 @@ jobs:
           cat > "$overlay/kustomization.yaml" <<EOF
           resources:
             - ../infra/k8s
+          # O runner tem 2 vCPUs: com as réplicas de produção os requests não
+          # cabem no nó único do kind e metade dos pods fica Pending. O smoke
+          # test valida que cada serviço sobe, não a capacidade de produção.
+          replicas:
+            - name: video-api
+              count: 1
+            - name: video-processor
+              count: 1
+            - name: notification
+              count: 1
+            - name: web
+              count: 1
+          patches:
+            # Sem metrics-server o HPA não escala por métrica, mas ainda força
+            # minReplicas — o que desfaria o ajuste acima.
+            - target:
+                kind: HorizontalPodAutoscaler
+              patch: |
+                - op: replace
+                  path: /spec/minReplicas
+                  value: 1
           images:
             - name: ghcr.io/${{ github.repository_owner }}/fiapx-video-api
               newTag: '${{ github.sha }}'

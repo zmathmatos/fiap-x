@@ -27,7 +27,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/apps/video-processor/dist apps/video-processor/dist
 
-USER node
+# Numeric UID (the `node` user): com um nome, o kubelet não consegue provar que
+# o usuário não é root e recusa o pod com runAsNonRoot.
+USER 1000:1000
 EXPOSE 9100
 
 ENTRYPOINT ["/sbin/tini", "--"]

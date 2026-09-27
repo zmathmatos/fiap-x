@@ -43,6 +43,34 @@ function ensureFixtures(): void {
     }
   }
 
+  const large = join(FIXTURES_DIR, 'large.mp4');
+  if (!existsSync(large)) {
+    const result = spawnSync(
+      process.env.FFMPEG_PATH ?? 'ffmpeg',
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'mandelbrot=size=1280x720:rate=30',
+        '-t',
+        '10',
+        '-b:v',
+        '6000k',
+        '-pix_fmt',
+        'yuv420p',
+        large,
+      ],
+      { stdio: 'inherit' },
+    );
+
+    if (result.status !== 0) {
+      throw new Error('ffmpeg não conseguiu gerar a fixture grande do BDD.');
+    }
+  }
+
   const corrupted = join(FIXTURES_DIR, 'corrupted.mp4');
   if (!existsSync(corrupted)) {
     // Random bytes with a video extension: accepted at upload, impossible to decode.

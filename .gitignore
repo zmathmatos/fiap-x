@@ -10,4 +10,4 @@ tmp/
 .DS_Store
 .vite/
 *.tsbuildinfo
-features/fixtures/
+**/features/fixtures/

@@ -124,13 +124,17 @@ npm run test:integration -w @fiapx/video-api   # Testcontainers (precisa de Dock
 npm run test:bdd -w @fiapx/video-api           # Cucumber contra o ambiente do compose
 ```
 
-| Workspace                     | Testes | Cobre                                                                                                 |
-| ----------------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
-| `@fiapx/shared`               | 28     | envelope, topologia de retry, política do consumidor, idempotência, progresso no Redis                |
-| `@fiapx/video-api`            | 89     | domínio, casos de uso, middleware, rotas, mapeamento de persistência, metadados do vídeo              |
-| `@fiapx/video-processor`      | 30     | argumentos do ffmpeg e do ffprobe, leitura de progresso, ciclo de processamento, limpeza do workspace |
-| `@fiapx/notification-service` | 14     | templates, escape de HTML, idempotência do envio                                                      |
-| `@fiapx/web`                  | 38     | formatação, cliente HTTP, polling adaptativo, paginação, dropzone                                     |
+| Workspace                     | Unitários | Cobre                                                                                                 |
+| ----------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
+| `@fiapx/shared`               | 29        | envelope, topologia de retry, política do consumidor, idempotência, progresso no Redis                |
+| `@fiapx/video-api`            | 119       | domínio, casos de uso, middleware, rotas, mapeamento de persistência, metadados do vídeo              |
+| `@fiapx/video-processor`      | 32        | argumentos do ffmpeg e do ffprobe, leitura de progresso, ciclo de processamento, limpeza do workspace |
+| `@fiapx/notification-service` | 24        | templates, escape de HTML, idempotência do envio                                                      |
+| `@fiapx/web`                  | 222       | formatação, cliente HTTP, polling adaptativo, paginação, dropzone, telas e componentes                |
+
+Além dos 426 unitários: 9 testes de integração contra um Postgres real (Testcontainers — repositório
+e bootstrap das migrations) e 8 cenários BDD contra o ambiente do compose, cobrindo upload até o zip,
+vídeo corrompido com e-mail de falha, vários vídeos em paralelo e isolamento entre usuários.
 
 Cobertura mínima de 80% por workspace, verificada no CI.
 
@@ -174,6 +178,9 @@ Todas as variáveis estão documentadas em [`env.example`](env.example). As que 
 > No Compose local a API conecta ao Postgres com o usuário `fiapx` (dono do banco) para simplificar
 > a demonstração. O `init.sql` também cria o role `fiapx_video`, restrito ao schema `video` — é ele
 > que o `Secret` do Kubernetes usa.
+>
+> Fora do Compose não existe script de init: quem garante o schema é o Job de migração, que cria o
+> schema antes de aplicar as migrations. Vale para Kubernetes e para qualquer banco gerenciado.
 
 ---
 
@@ -184,8 +191,12 @@ Todas as variáveis estão documentadas em [`env.example`](env.example). As que 
 - **CD** em `main`: publica as imagens no GHCR com as tags `sha` e `latest`. Como o projeto não opera
   um cluster real, o job de "deploy" sobe um cluster [kind](https://kind.sigs.k8s.io/) efêmero,
   aplica stand-ins descartáveis do Postgres/Redis/RabbitMQ/S3Mock/MailHog
-  (`infra/k8s/kind/dependencies.yaml`) e aplica os manifests reais de `infra/k8s` fixados na imagem
-  do commit — validando que os manifests aplicam, as migrations rodam e todo rollout fica Ready.
+  (`infra/k8s/kind/dependencies.yaml`) e aplica os manifests de `infra/k8s` fixados na imagem do
+  commit — validando que os manifests aplicam, as migrations rodam e todo rollout fica Ready.
+  O runner tem 2 vCPUs, então o overlay do smoke test reduz cada serviço a uma réplica e baixa o
+  `minReplicas` dos HPAs; os manifests versionados seguem com a topologia de produção. O que o smoke
+  test não cobre — tráfego real dentro do cluster e o HPA escalando, que precisa de metrics-server —
+  é coberto pelos cenários BDD contra o compose.
 
 ---
 
@@ -195,6 +206,11 @@ Todas as variáveis estão documentadas em [`env.example`](env.example). As que 
 kubectl -n fiapx create secret generic fiapx-secrets --from-literal=JWT_SECRET=... # ver secret.example.yaml
 kubectl apply -k infra/k8s
 ```
+
+`infra/k8s` traz só a aplicação: Postgres, Redis, RabbitMQ e o object storage são endereçados pelo
+`ConfigMap`/`Secret` e devem existir antes (serviços gerenciados, ou os stand-ins de
+`infra/k8s/kind/dependencies.yaml` para um cluster descartável). O `Job` `video-api-migrate` cria o
+schema e aplica as migrations a cada apply.
 
 O `video-processor` escala de 2 a 10 réplicas por CPU, com `terminationGracePeriodSeconds: 120`
 para que um vídeo em processamento termine antes de o pod morrer.

@@ -13,6 +13,11 @@ Funcionalidade: Processamento de vídeos
     E em até 90 segundos o status muda para "COMPLETED"
     E o download retorna um arquivo zip com pelo menos 1 frame
 
+  Cenário: Vídeo grande sobe em multipart e é processado
+    Quando ele envia o vídeo "large.mp4"
+    Então em até 120 segundos o status muda para "COMPLETED"
+    E o download retorna um arquivo zip com pelo menos 1 frame
+
   Cenário: Vídeo corrompido falha e o usuário é notificado
     Quando ele envia o vídeo "corrupted.mp4"
     Então em até 90 segundos o status muda para "FAILED"

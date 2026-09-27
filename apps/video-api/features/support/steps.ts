@@ -17,6 +17,23 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',
 };
 
+const ENCODED_WORD = /=\?([^?]+)\?([QqBb])\?([^?]*)\?=/g;
+
+function decodeMimeWords(header: string): string {
+  return header.replace(ENCODED_WORD, (_match, charset: string, encoding: string, text: string) => {
+    if (encoding.toUpperCase() === 'B') {
+      return Buffer.from(text, 'base64').toString(charset as BufferEncoding);
+    }
+
+    const bytes = text
+      .replace(/_/g, ' ')
+      .replace(/=([0-9A-Fa-f]{2})/g, (_hex, code: string) =>
+        String.fromCharCode(parseInt(code, 16)),
+      );
+    return Buffer.from(bytes, 'binary').toString(charset as BufferEncoding);
+  });
+}
+
 function fixtureForm(fileName: string): FormData {
   const bytes = readFileSync(join(FIXTURES_DIR, fileName));
   const extension = fileName.split('.').at(-1) ?? '';
@@ -200,7 +217,7 @@ Then(
 
         const found = inbox.items.some((message) => {
           const to = message.Content.Headers.To?.join(',') ?? '';
-          const subject = message.Content.Headers.Subject?.join(' ') ?? '';
+          const subject = decodeMimeWords(message.Content.Headers.Subject?.join(' ') ?? '');
           return to.includes(this.session.email) && subject.includes(fileName);
         });
 

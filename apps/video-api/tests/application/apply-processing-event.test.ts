@@ -45,7 +45,10 @@ function makeDeps(video: Video | null = pendingVideo()) {
     listEvents: jest.fn(),
   } as unknown as jest.Mocked<VideoRepository>;
 
-  const idempotency = { markProcessed: jest.fn().mockResolvedValue(true) };
+  const idempotency = {
+    wasProcessed: jest.fn().mockResolvedValue(false),
+    markProcessed: jest.fn().mockResolvedValue(true),
+  };
 
   return { repo, idempotency, useCase: new ApplyProcessingEventUseCase(repo, idempotency) };
 }
@@ -53,7 +56,7 @@ function makeDeps(video: Video | null = pendingVideo()) {
 describe('ApplyProcessingEventUseCase', () => {
   it('ignores an event whose id was already processed', async () => {
     const { repo, idempotency, useCase } = makeDeps();
-    idempotency.markProcessed.mockResolvedValue(false);
+    idempotency.wasProcessed.mockResolvedValue(true);
 
     await useCase.execute(createEnvelope(ROUTING_KEYS.VIDEO_PROCESSED, processedPayload));
 

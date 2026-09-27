@@ -181,8 +181,8 @@ export class RabbitConnection {
     }
 
     channel.publish(
-      retryExchangeName(exchange),
-      `${delay}.${delivery.fields.routingKey}`,
+      retryExchangeName(exchange, delay),
+      delivery.fields.routingKey,
       delivery.content,
       { persistent: true, headers },
     );

@@ -3,10 +3,12 @@ import { buildTopology, nextRetryDelay, RETRY_DELAYS_MS } from '../../src/messag
 describe('buildTopology', () => {
   const plan = buildTopology('video-events');
 
-  it('declares a durable topic exchange plus retry and dlq exchanges', () => {
+  it('declares a durable topic exchange, one retry exchange per delay and the dlx', () => {
     expect(plan.exchanges).toEqual([
       { name: 'video-events', type: 'topic', durable: true },
-      { name: 'video-events.retry', type: 'topic', durable: true },
+      { name: 'video-events.retry.30000', type: 'topic', durable: true },
+      { name: 'video-events.retry.120000', type: 'topic', durable: true },
+      { name: 'video-events.retry.600000', type: 'topic', durable: true },
       { name: 'video-events.dlx', type: 'topic', durable: true },
     ]);
   });
@@ -34,11 +36,11 @@ describe('buildTopology', () => {
     });
   });
 
-  it('binds each retry queue to its own delay prefix', () => {
+  it('binds each retry queue to the exchange of its own delay, catching every key', () => {
     expect(plan.bindings).toContainEqual({
       queue: 'video-events.retry.120000',
-      exchange: 'video-events.retry',
-      routingKey: '120000.#',
+      exchange: 'video-events.retry.120000',
+      routingKey: '#',
     });
   });
 });

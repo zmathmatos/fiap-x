@@ -16,7 +16,7 @@ export class NotifyVideoFailedUseCase implements NotificationHandler {
       return;
     }
 
-    if (!(await this.deps.idempotency.markProcessed(envelope.eventId))) return;
+    if (await this.deps.idempotency.wasProcessed(envelope.eventId)) return;
 
     const mail = renderFailureEmail({
       originalName: payload.originalName,
@@ -28,6 +28,7 @@ export class NotifyVideoFailedUseCase implements NotificationHandler {
     // A send failure is deliberately not caught: the consumer puts the message on
     // the retry ladder, so a temporary SMTP outage does not lose the notification.
     await this.deps.mailer.send({ to: payload.userEmail, ...mail });
+    await this.deps.idempotency.markProcessed(envelope.eventId);
 
     this.deps.metrics.sent('failure');
     this.deps.logger.info(

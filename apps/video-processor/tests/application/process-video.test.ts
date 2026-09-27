@@ -38,7 +38,10 @@ function makeDeps() {
 
   const zipArchiver = { archive: jest.fn().mockReturnValue(Readable.from(['zip-bytes'])) };
   const publisher = { publish: jest.fn().mockResolvedValue(undefined) };
-  const idempotency = { markProcessed: jest.fn().mockResolvedValue(true) };
+  const idempotency = {
+    wasProcessed: jest.fn().mockResolvedValue(false),
+    markProcessed: jest.fn().mockResolvedValue(true),
+  };
   const progress = { report: jest.fn().mockResolvedValue(undefined), read: jest.fn() };
   const workspace = {
     create: jest.fn().mockResolvedValue({
@@ -188,7 +191,7 @@ describe('ProcessVideoUseCase', () => {
 
   it('skips work when the event was already processed', async () => {
     const { extractor, idempotency, publisher, useCase } = makeDeps();
-    idempotency.markProcessed.mockResolvedValue(false);
+    idempotency.wasProcessed.mockResolvedValue(true);
 
     await useCase.execute(envelope);
 

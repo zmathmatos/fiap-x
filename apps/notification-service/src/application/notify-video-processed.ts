@@ -16,7 +16,7 @@ export class NotifyVideoProcessedUseCase implements NotificationHandler {
       return;
     }
 
-    if (!(await this.deps.idempotency.markProcessed(envelope.eventId))) return;
+    if (await this.deps.idempotency.wasProcessed(envelope.eventId)) return;
 
     const mail = renderSuccessEmail({
       originalName: payload.originalName,
@@ -26,6 +26,7 @@ export class NotifyVideoProcessedUseCase implements NotificationHandler {
     });
 
     await this.deps.mailer.send({ to: payload.userEmail, ...mail });
+    await this.deps.idempotency.markProcessed(envelope.eventId);
 
     this.deps.metrics.sent('success');
     this.deps.logger.info(

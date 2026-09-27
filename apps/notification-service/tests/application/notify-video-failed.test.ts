@@ -22,7 +22,10 @@ const processedPayload = {
 
 function makeDeps() {
   const mailer = { send: jest.fn().mockResolvedValue(undefined) };
-  const idempotency = { markProcessed: jest.fn().mockResolvedValue(true) };
+  const idempotency = {
+    wasProcessed: jest.fn().mockResolvedValue(false),
+    markProcessed: jest.fn().mockResolvedValue(true),
+  };
   const config = { appUrl: 'http://localhost:8080' };
   const metrics = { sent: jest.fn() };
   const logger = createLogger('test');
@@ -48,7 +51,7 @@ describe('NotifyVideoFailedUseCase', () => {
 
   it('does not send twice for the same event', async () => {
     const { mailer, idempotency, failed } = makeDeps();
-    idempotency.markProcessed.mockResolvedValue(false);
+    idempotency.wasProcessed.mockResolvedValue(true);
 
     await failed.execute(createEnvelope(ROUTING_KEYS.VIDEO_FAILED, failedPayload));
 

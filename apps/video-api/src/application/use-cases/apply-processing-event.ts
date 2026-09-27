@@ -32,7 +32,7 @@ export class ApplyProcessingEventUseCase {
   async execute(envelope: EventEnvelope<unknown>): Promise<void> {
     if (!OWNED_EVENTS.includes(envelope.eventType)) return;
 
-    if (!(await this.idempotency.markProcessed(envelope.eventId))) return;
+    if (await this.idempotency.wasProcessed(envelope.eventId)) return;
 
     const payload = envelope.payload as ResultPayload;
     const video = await this.videos.findById(payload.videoId);
@@ -67,11 +67,16 @@ export class ApplyProcessingEventUseCase {
         break;
     }
 
-    if (!applied) return;
+    if (!applied) {
+      await this.idempotency.markProcessed(envelope.eventId);
+      return;
+    }
 
     await this.videos.save(video);
     await this.videos.appendEvent(video.id, envelope.eventType, {
       ...(payload as unknown as Record<string, unknown>),
     });
+
+    await this.idempotency.markProcessed(envelope.eventId);
   }
 }

@@ -66,6 +66,10 @@ export function createObjectStorage(config: StorageConfig): ObjectStorage {
     },
     // S3Mock serves buckets as a path segment rather than a subdomain.
     forcePathStyle: config.forcePathStyle ?? false,
+    // S3Mock does not echo per-part checksums back, and the SDK then leaves them out
+    // of CompleteMultipartUpload — which S3Mock rejects. Every multipart upload (any
+    // file over 5 MB) would fail. S3 itself is happy either way.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
   });
 
   return {

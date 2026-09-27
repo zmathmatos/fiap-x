@@ -24,7 +24,7 @@ data:
   DB_SCHEMA: video
   REDIS_URL: redis://redis:6379
   RABBITMQ_EXCHANGE: video-events
-  STORAGE_ENDPOINT: http://minio:9000
+  STORAGE_ENDPOINT: http://s3mock:9000
   STORAGE_REGION: us-east-1
   STORAGE_BUCKET_RAW: fiapx-raw
   STORAGE_BUCKET_ZIPS: fiapx-zips

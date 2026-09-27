@@ -30,19 +30,19 @@ jobs:
           - app: web
             dockerfile: apps/web/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -54,36 +54,109 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
 
   deploy:
-    name: deploy to kubernetes
+    name: deploy smoke test (kind)
     runs-on: ubuntu-latest
     needs: [publish]
-    environment: production
-    # Requires a KUBE_CONFIG secret. Without a cluster configured the job is a
-    # no-op instead of a red build.
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # We don't operate a real cluster, so this doesn't ship anywhere. It spins
+    # up an ephemeral kind cluster, deploys throwaway stand-ins for Postgres/
+    # Redis/RabbitMQ/S3Mock/MailHog (infra/k8s/kind/dependencies.yaml), and
+    # applies the real infra/k8s manifests pinned to this build's images. That
+    # proves the manifests apply, migrations run, and every rollout reaches
+    # Ready — catching the kind of breakage a real deploy would hit, without
+    # needing production credentials.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Configure kubectl
+      - name: Create kind cluster
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc
+        with:
+          cluster_name: fiapx-cd
+          wait: 60s
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load this build's images into kind
         run: |
-          mkdir -p "$HOME/.kube"
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
+          for app in video-api video-processor notification web; do
+            image="ghcr.io/${{ github.repository_owner }}/fiapx-$app:${{ github.sha }}"
+            docker pull "$image"
+            kind load docker-image "$image" --name fiapx-cd
+          done
 
-      - name: Apply manifests
-        run: kubectl apply -k infra/k8s
+      - name: Generate throwaway credentials
+        # Nothing in the repository carries a password. The values live only in this
+        # job's cluster, which is destroyed with the runner.
+        run: |
+          kubectl create namespace fiapx --dry-run=client -o yaml | kubectl apply -f -
+
+          rabbitmq_password="$(openssl rand -hex 24)"
+
+          kubectl -n fiapx create secret generic fiapx-secrets \
+            --from-literal=JWT_SECRET="$(openssl rand -base64 48)" \
+            --from-literal=DB_USER=fiapx \
+            --from-literal=DB_PASSWORD="$(openssl rand -hex 24)" \
+            --from-literal=RABBITMQ_USER=fiapx \
+            --from-literal=RABBITMQ_PASSWORD="$rabbitmq_password" \
+            --from-literal=RABBITMQ_URL="amqp://fiapx:$rabbitmq_password@rabbitmq:5672" \
+            --from-literal=STORAGE_ACCESS_KEY=fiapx \
+            --from-literal=STORAGE_SECRET_KEY="$(openssl rand -hex 24)"
+
+      - name: Deploy backing services
+        # These are plain Kubernetes-managed pulls (kubelet -> containerd -> registry),
+        # not `docker save`/`kind load` — that path is a host-Docker-only quirk with
+        # multi-arch images and isn't what's used here, so it doesn't apply.
+        run: kubectl apply -f infra/k8s/kind/dependencies.yaml
+
+      - name: Wait for backing services
+        run: kubectl -n fiapx wait --for=condition=available deployment -l tier=dependency --timeout=300s
+
+      - name: Apply application manifests pinned to this build
+        run: |
+          # kustomize refuses absolute/outside-root resource paths, so the
+          # overlay has to live inside the checkout, as a sibling of infra/
+          # (not nested under infra/k8s itself, which kustomize treats as a
+          # cycle when the overlay resource points back at its own ancestor).
+          overlay="$GITHUB_WORKSPACE/.kind-overlay"
+          mkdir -p "$overlay"
+          cat > "$overlay/kustomization.yaml" <<EOF
+          resources:
+            - ../infra/k8s
+          images:
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-video-api
+              newTag: '${{ github.sha }}'
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-video-processor
+              newTag: '${{ github.sha }}'
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-notification
+              newTag: '${{ github.sha }}'
+            - name: ghcr.io/${{ github.repository_owner }}/fiapx-web
+              newTag: '${{ github.sha }}'
+          EOF
+          kubectl apply -k "$overlay"
 
       - name: Run migrations
-        run: |
-          kubectl -n fiapx delete job video-api-migrate --ignore-not-found
-          kubectl apply -f infra/k8s/video-api.yaml
-          kubectl -n fiapx wait --for=condition=complete job/video-api-migrate --timeout=300s
+        run: kubectl -n fiapx wait --for=condition=complete job/video-api-migrate --timeout=180s
 
       - name: Roll out services
         run: |
           for deployment in video-api video-processor notification web; do
-            kubectl -n fiapx set image "deployment/$deployment" \
-              "$deployment=ghcr.io/${{ github.repository_owner }}/fiapx-$deployment:${{ github.sha }}" \
-              || true
-            kubectl -n fiapx rollout status "deployment/$deployment" --timeout=300s
+            kubectl -n fiapx rollout status "deployment/$deployment" --timeout=180s
+          done
+
+      - name: Dump cluster state
+        if: failure()
+        run: |
+          kubectl -n fiapx get all
+          kubectl -n fiapx get events --sort-by=.lastTimestamp
+          for pod in $(kubectl -n fiapx get pods -o name); do
+            echo "::group::describe $pod"
+            kubectl -n fiapx describe "$pod"
+            echo "::endgroup::"
+            echo "::group::logs $pod"
+            kubectl -n fiapx logs "$pod" --all-containers --prefix --tail=200 || true
+            echo "::endgroup::"
           done

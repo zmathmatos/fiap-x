@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { createEnvelope, ROUTING_KEYS, createLogger } from '@fiapx/shared';
 import { ProcessVideoUseCase } from '../../src/application/process-video';
+import { UnprocessableVideoError } from '../../src/domain/errors';
 
 const payload = {
   videoId: 'v1',
@@ -153,6 +154,22 @@ describe('ProcessVideoUseCase', () => {
       }),
       'corr-1',
     );
+  });
+
+  it('does not put an undecodable video back on the retry ladder', async () => {
+    const { extractor, publisher, idempotency, useCase } = makeDeps();
+    extractor.extract.mockRejectedValue(
+      new UnprocessableVideoError('arquivo não pôde ser decodificado'),
+    );
+
+    await expect(useCase.execute(envelope, 1)).resolves.toBeUndefined();
+
+    expect(publisher.publish).toHaveBeenCalledWith(
+      'video.failed',
+      expect.objectContaining({ videoId: 'v1', reason: 'arquivo não pôde ser decodificado' }),
+      'corr-1',
+    );
+    expect(idempotency.markProcessed).toHaveBeenCalledWith(envelope.eventId);
   });
 
   it('fails the video when no frame could be extracted', async () => {

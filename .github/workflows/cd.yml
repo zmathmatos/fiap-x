@@ -59,7 +59,7 @@ jobs:
     needs: [publish]
     # We don't operate a real cluster, so this doesn't ship anywhere. It spins
     # up an ephemeral kind cluster, deploys throwaway stand-ins for Postgres/
-    # Redis/RabbitMQ/MinIO/MailHog (infra/k8s/kind/dependencies.yaml), and
+    # Redis/RabbitMQ/S3Mock/MailHog (infra/k8s/kind/dependencies.yaml), and
     # applies the real infra/k8s manifests pinned to this build's images. That
     # proves the manifests apply, migrations run, and every rollout reaches
     # Ready — catching the kind of breakage a real deploy would hit, without

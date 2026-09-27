@@ -183,7 +183,7 @@ Todas as variáveis estão documentadas em [`env.example`](env.example). As que 
   cenários BDD, build das quatro imagens e análise SonarCloud. Matriz por workspace.
 - **CD** em `main`: publica as imagens no GHCR com as tags `sha` e `latest`. Como o projeto não opera
   um cluster real, o job de "deploy" sobe um cluster [kind](https://kind.sigs.k8s.io/) efêmero,
-  aplica stand-ins descartáveis do Postgres/Redis/RabbitMQ/MinIO/MailHog
+  aplica stand-ins descartáveis do Postgres/Redis/RabbitMQ/S3Mock/MailHog
   (`infra/k8s/kind/dependencies.yaml`) e aplica os manifests reais de `infra/k8s` fixados na imagem
   do commit — validando que os manifests aplicam, as migrations rodam e todo rollout fica Ready.
 

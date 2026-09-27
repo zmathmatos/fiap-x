@@ -18,14 +18,7 @@ spec:
                 name: fiapx-config
             - secretRef:
                 name: fiapx-secrets
-          command:
-            - node
-            - -e
-            - >-
-              const{createDataSource}=require('/app/apps/video-api/dist/infrastructure/database/data-source');
-              const{loadConfig}=require('/app/apps/video-api/dist/config');
-              const ds=createDataSource(loadConfig().database);
-              ds.initialize().then(()=>ds.runMigrations()).then(m=>{console.log('migrations aplicadas:',m.length);return ds.destroy()}).then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})
+          args: ['node', 'apps/video-api/dist/infrastructure/database/migrate.js']
 ---
 apiVersion: apps/v1
 kind: Deployment

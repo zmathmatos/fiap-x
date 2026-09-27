@@ -10,6 +10,7 @@ module.exports = {
     '!src/**/index.ts',
     '!src/server.ts',
     '!src/container.ts',
+    '!src/infrastructure/database/migrate.ts',
     '!src/infrastructure/database/migrations/**',
   ],
   coverageThreshold: {

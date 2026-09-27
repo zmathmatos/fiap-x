@@ -135,3 +135,14 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Quality gate detail
+        if: always()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          API: https://sonarcloud.io/api
+          KEY: zmathmatos_fiap-x
+        run: |
+          curl -s -u "$SONAR_TOKEN:" "$API/new_code_periods/show?project=$KEY&branch=main"; echo
+          curl -s -u "$SONAR_TOKEN:" "$API/measures/component?component=$KEY&branch=main&metricKeys=coverage,new_coverage,new_lines_to_cover,new_uncovered_lines,lines_to_cover,uncovered_lines"; echo
+          curl -s -u "$SONAR_TOKEN:" "$API/measures/component_tree?component=$KEY&branch=main&metricKeys=new_uncovered_lines,new_lines_to_cover&qualifiers=FIL&ps=40&s=metric&metricSort=new_uncovered_lines&asc=false"; echo

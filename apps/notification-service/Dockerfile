@@ -26,8 +26,6 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/apps/notification-service/dist apps/notification-service/dist
 
-# Numeric UID (the `node` user): com um nome, o kubelet não consegue provar que
-# o usuário não é root e recusa o pod com runAsNonRoot.
 USER 1000:1000
 EXPOSE 9101
 

@@ -112,4 +112,93 @@ describe('useUploadQueue naming', () => {
     );
     expect(result.current.items.find((i) => i.file.name === 'b.mp4')?.displayName).toBe('b.mp4');
   });
+
+  it('tells the user when the upload survived but the deferred rename did not', async () => {
+    let finish: (video: { id: string }) => void = () => undefined;
+    uploadWithProgress.mockImplementation(
+      () => new Promise<{ id: string }>((resolve) => (finish = resolve)),
+    );
+    renameVideo.mockRejectedValueOnce(new Error('500'));
+
+    const { result } = renderHook(() => useUploadQueue());
+    act(() => result.current.enqueue([file()]));
+    await waitFor(() => expect(result.current.items[0]?.state).toBe('uploading'));
+
+    await act(async () => {
+      await result.current.rename(result.current.items[0]!.id, 'Nome que não salva');
+    });
+
+    await act(async () => {
+      finish({ id: 'v9' });
+    });
+
+    await waitFor(() =>
+      expect(result.current.items[0]?.error).toBe('O vídeo subiu, mas o nome não foi salvo.'),
+    );
+    expect(result.current.items[0]?.state).toBe('done');
+  });
+});
+
+describe('useUploadQueue cancelling and clearing', () => {
+  beforeEach(() => {
+    renameVideo.mockClear();
+    uploadWithProgress.mockReset();
+  });
+
+  it('aborts the upload in flight when the user cancels it', async () => {
+    uploadWithProgress.mockImplementation(
+      (options: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new Error('Envio cancelado.')));
+        }),
+    );
+
+    const { result } = renderHook(() => useUploadQueue());
+    act(() => result.current.enqueue([file()]));
+    await waitFor(() => expect(result.current.items[0]?.state).toBe('uploading'));
+
+    act(() => result.current.cancel(result.current.items[0]!.id));
+
+    await waitFor(() => expect(result.current.items[0]?.state).toBe('cancelled'));
+    expect(result.current.items[0]?.error).toBe('Envio cancelado.');
+  });
+
+  it('never starts a file that was cancelled while still in the queue', async () => {
+    const release: Array<() => void> = [];
+    uploadWithProgress.mockImplementation(
+      () => new Promise<{ id: string }>((resolve) => release.push(() => resolve({ id: 'v' }))),
+    );
+
+    const { result } = renderHook(() => useUploadQueue());
+    act(() => result.current.enqueue([file('1.mp4'), file('2.mp4'), file('3.mp4'), file('4.mp4')]));
+
+    const queued = result.current.items.find((item) => item.state === 'queued');
+    expect(queued?.file.name).toBe('4.mp4');
+
+    act(() => result.current.cancel(queued!.id));
+
+    await act(async () => {
+      release.forEach((resolve) => resolve());
+    });
+
+    const started = uploadWithProgress.mock.calls.map(([options]) => (options as { file: File }).file.name);
+    expect(started).toEqual(['1.mp4', '2.mp4', '3.mp4']);
+  });
+
+  it('clears the finished uploads and keeps the rest', async () => {
+    uploadWithProgress.mockImplementation((options: { file: File }) =>
+      options.file.name === 'ok.mp4'
+        ? Promise.resolve({ id: 'v1' })
+        : Promise.reject(new Error('Falha no envio.')),
+    );
+
+    const { result } = renderHook(() => useUploadQueue());
+    act(() => result.current.enqueue([file('ok.mp4'), file('ruim.mp4')]));
+    await waitFor(() => expect(result.current.items.every((i) => i.state !== 'uploading')).toBe(true));
+
+    act(() => result.current.clearFinished());
+
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0]?.file.name).toBe('ruim.mp4');
+  });
 });

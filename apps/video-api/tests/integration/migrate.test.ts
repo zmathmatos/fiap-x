@@ -31,9 +31,6 @@ afterAll(async () => {
 });
 
 describe('runMigrations', () => {
-  // Reproduces the CD failure: a database that has never seen infra/db/init.sql
-  // has no `video` schema, and TypeORM creates its migrations table inside the
-  // configured schema before the first migration runs.
   it('bootstraps the schema on a database with no init script', async () => {
     const applied = await runMigrations(dataSource, 'video');
 

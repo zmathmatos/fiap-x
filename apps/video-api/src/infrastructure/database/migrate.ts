@@ -3,12 +3,6 @@ import type { DataSource, Migration } from 'typeorm';
 import { loadConfig } from '../../config';
 import { createDataSource } from './data-source';
 
-/**
- * TypeORM writes its migrations-tracking table inside the configured schema
- * before executing the first migration, so the schema has to exist already.
- * Only docker-compose gets it from infra/db/init.sql; Kubernetes and managed
- * databases have no init script, hence the bootstrap here.
- */
 export async function runMigrations(dataSource: DataSource, schema: string): Promise<Migration[]> {
   const queryRunner = dataSource.createQueryRunner();
   try {

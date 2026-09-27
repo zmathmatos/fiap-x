@@ -12,6 +12,7 @@ import type { FrameExtractor, VideoMetadata } from '../domain/ports/frame-extrac
 import type { ZipArchiver } from '../domain/ports/archiver';
 import type { JobWorkspace, WorkspaceFactory } from '../domain/ports/workspace';
 import type { ProcessingMetrics } from '../domain/ports/processing-metrics';
+import { UnprocessableVideoError } from '../domain/errors';
 
 export interface EventPublisherPort {
   publish<T>(routingKey: string, payload: T, correlationId?: string): Promise<void>;
@@ -54,8 +55,7 @@ export class ProcessVideoUseCase {
   async execute(envelope: EventEnvelope<unknown>, attempt = 0): Promise<void> {
     if (envelope.eventType !== ROUTING_KEYS.VIDEO_UPLOADED) return;
 
-    // A redelivery after a crash must not produce a second zip or a second event.
-    if (!(await this.deps.idempotency.markProcessed(envelope.eventId))) {
+    if (await this.deps.idempotency.wasProcessed(envelope.eventId)) {
       this.deps.logger.info({ eventId: envelope.eventId }, 'event already processed, skipping');
       return;
     }
@@ -93,6 +93,8 @@ export class ProcessVideoUseCase {
         thumbnailKey,
       });
 
+      await this.deps.idempotency.markProcessed(envelope.eventId);
+
       this.deps.metrics.videoProcessed(frameCount);
       log.info({ frameCount, sizeBytes }, 'video processed');
     } catch (error) {
@@ -100,6 +102,11 @@ export class ProcessVideoUseCase {
 
       this.deps.metrics.videoFailed();
       log.error({ err: error, attempt }, 'video processing failed');
+
+      if (error instanceof UnprocessableVideoError) {
+        await this.deps.idempotency.markProcessed(envelope.eventId);
+        return;
+      }
 
       // Rethrown so the consumer puts the message on the retry ladder.
       throw error;

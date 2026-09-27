@@ -7,6 +7,7 @@ import type {
   FrameExtractor,
   VideoMetadata,
 } from '../../domain/ports/frame-extractor';
+import { UnprocessableVideoError } from '../../domain/errors';
 import { buildFfmpegArgs, buildFfprobeArgs, parseFfprobeMetadata } from './build-ffmpeg-args';
 import { createProgressReader, FFMPEG_PROGRESS_ARGS } from './ffmpeg-progress';
 
@@ -72,7 +73,13 @@ export class FfmpegFrameExtractor implements FrameExtractor {
     const args = buildFfmpegArgs(input);
     args.splice(args.length - 1, 0, ...FFMPEG_PROGRESS_ARGS);
 
-    await run(this.config.ffmpegPath, args, readProgress);
+    try {
+      await run(this.config.ffmpegPath, args, readProgress);
+    } catch (error) {
+      throw new UnprocessableVideoError(
+        error instanceof Error ? error.message : 'ffmpeg não conseguiu decodificar o vídeo',
+      );
+    }
 
     const files = await readdir(input.outputDir);
     const frameCount = files.filter((name) => name.endsWith('.jpg')).length;

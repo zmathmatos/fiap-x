@@ -45,7 +45,7 @@ jobs:
         run: npm run test:unit -w ${{ matrix.workspace }} -- --coverage
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ strategy.job-index }}
           path: '**/coverage/lcov.info'

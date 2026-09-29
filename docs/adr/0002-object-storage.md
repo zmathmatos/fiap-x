@@ -1,7 +1,7 @@
 # ADR 0002 — Vídeos e zips em object storage
 
 **Data:** 2026-09-01
-**Status:** aceito
+**Status:** aceito — ver _Atualização_ no fim: o test double local passou a ser o S3Mock
 
 ## Contexto
 
@@ -26,7 +26,7 @@ disco da API.
 
 - Qualquer réplica de qualquer serviço acessa qualquer arquivo.
 - A API permanece sem estado: nada no disco local para preservar entre deploys.
-- Trocar MinIO por S3 é uma mudança de variável de ambiente, não de código.
+- Trocar o test double local por S3 é uma mudança de variável de ambiente, não de código.
 - Um upload de 500 MB consome memória constante.
 
 **Contra**
@@ -35,3 +35,13 @@ disco da API.
 - O download passa pela API em vez de vir direto do storage. Uma URL pré-assinada seria mais
   barata, mas exigiria CORS no bucket e expiração de link — trabalho que não se paga nesta escala.
   A API faz stream do objeto, sem bufferizar.
+
+## Atualização — 2026-09-28
+
+O papel de "S3 em desenvolvimento" deixou de ser cumprido pelo MinIO e passou a ser cumprido pelo
+**S3Mock** (`adobe/s3mock`). As imagens do MinIO no Docker Hub e no quay.io passaram a exigir pull
+autenticado em todas as tags, o que quebrava `make up` e o CI. O S3Mock continua livre para pull e
+cria os dois buckets no boot, dispensando o container de init.
+
+A decisão de fundo não muda: object storage compatível com S3, endereçado só por variável de
+ambiente. Em produção continua sendo o S3.

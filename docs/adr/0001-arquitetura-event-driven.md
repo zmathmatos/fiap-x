@@ -20,8 +20,11 @@ A `video-api` aceita o upload, grava o arquivo no object storage, publica `video
 responde `202 Accepted`. Um worker independente consome o evento e faz o trabalho pesado. O
 resultado volta como evento, e a API atualiza o status.
 
-Os serviços se coordenam por eventos, sem orquestrador central — o mesmo padrão de saga
-coreografada já adotado nos serviços da Fase 4.
+Os serviços se coordenam por eventos, em coreografia: cada um reage ao que lhe interessa e publica
+o seu resultado, sem orquestrador central e sem saber quem mais está escutando.
+
+Uma falha transitória manda a mensagem para a escada de retry e, esgotadas as tentativas, para a
+dead letter queue. Uma falha definitiva marca o vídeo como `FAILED` com o motivo e notifica o dono.
 
 ## Consequências
 

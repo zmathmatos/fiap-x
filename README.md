@@ -128,11 +128,11 @@ npm run test:bdd -w @fiapx/video-api           # Cucumber contra o ambiente do c
 | ----------------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
 | `@fiapx/shared`               | 29        | envelope, topologia de retry, política do consumidor, idempotência, progresso no Redis                |
 | `@fiapx/video-api`            | 119       | domínio, casos de uso, middleware, rotas, mapeamento de persistência, metadados do vídeo              |
-| `@fiapx/video-processor`      | 32        | argumentos do ffmpeg e do ffprobe, leitura de progresso, ciclo de processamento, limpeza do workspace |
+| `@fiapx/video-processor`      | 33        | argumentos do ffmpeg e do ffprobe, leitura de progresso, ciclo de processamento, limpeza do workspace |
 | `@fiapx/notification-service` | 24        | templates, escape de HTML, idempotência do envio                                                      |
-| `@fiapx/web`                  | 222       | formatação, cliente HTTP, polling adaptativo, paginação, dropzone, telas e componentes                |
+| `@fiapx/web`                  | 247       | formatação, cliente HTTP, polling adaptativo, paginação, dropzone, telas e componentes                |
 
-Além dos 426 unitários: 9 testes de integração contra um Postgres real (Testcontainers — repositório
+Além dos 452 unitários: 9 testes de integração contra um Postgres real (Testcontainers — repositório
 e bootstrap das migrations) e 8 cenários BDD contra o ambiente do compose, cobrindo upload até o zip,
 vídeo corrompido com e-mail de falha, vários vídeos em paralelo e isolamento entre usuários.
 

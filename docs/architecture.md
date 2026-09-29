@@ -7,7 +7,7 @@ C4Context
   Person(user, "Usuário", "Envia vídeos e baixa os frames")
   System(fiapx, "FIAP X", "Processamento assíncrono de vídeos")
   System_Ext(smtp, "Servidor SMTP", "Entrega os e-mails de notificação")
-  System_Ext(storage, "Object storage", "MinIO em dev, S3 em produção")
+  System_Ext(storage, "Object storage", "S3Mock em dev, S3 em produção")
 
   Rel(user, fiapx, "Envia vídeo, acompanha status, baixa zip", "HTTPS")
   Rel(fiapx, smtp, "Notifica falha e conclusão", "SMTP")
@@ -25,7 +25,7 @@ flowchart TB
 
   pg[("PostgreSQL<br/>schema video")]
   redis[("Redis<br/>idempotência")]
-  s3[("MinIO / S3<br/>raw + zips")]
+  s3[("S3Mock / S3<br/>raw + zips")]
   mq{{"RabbitMQ<br/>exchange video-events"}}
 
   web -->|JWT| api
@@ -50,8 +50,8 @@ Cada serviço tem uma responsabilidade única e um dono claro de dados:
 | `video-processor`      | nada                        | **sem estado** — por isso escala livremente |
 | `notification-service` | nada                        | sem estado                                  |
 
-Nenhum serviço lê o banco de outro. A comunicação é exclusivamente por eventos, no padrão saga
-coreografada: não existe orquestrador central.
+Nenhum serviço lê o banco de outro. A comunicação é exclusivamente por eventos, em coreografia: não
+existe orquestrador central.
 
 ## 3. Fluxo de processamento
 
@@ -231,16 +231,16 @@ violação quebra o CI em vez de ficar como convenção escrita.
 
 ### Portas — o que cada camada exige de fora
 
-| Porta                                                                  | Serviço                | Implementação                |
-| ---------------------------------------------------------------------- | ---------------------- | ---------------------------- |
-| `VideoRepository`, `UserRepository`                                    | `video-api`            | TypeORM sobre Postgres       |
-| `PasswordHasher`, `TokenService`                                       | `video-api`            | bcrypt, jsonwebtoken         |
-| `MetricsExporter`, `VideoMetrics`                                      | `video-api`            | `prom-client`                |
-| `FrameExtractor`, `ZipArchiver`                                        | `video-processor`      | ffmpeg/ffprobe, archiver     |
-| `WorkspaceFactory`                                                     | `video-processor`      | diretório temporário por job |
-| `ProcessingMetrics`                                                    | `video-processor`      | `prom-client`                |
-| `Mailer`, `NotificationMetrics`                                        | `notification-service` | Nodemailer, `prom-client`    |
-| `ObjectStorage`, `IdempotencyStore`, `ProgressStore`, `EventPublisher` | `packages/shared`      | S3/MinIO, Redis, RabbitMQ    |
+| Porta                                                                  | Serviço                | Implementação                       |
+| ---------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
+| `VideoRepository`, `UserRepository`                                    | `video-api`            | TypeORM sobre Postgres              |
+| `PasswordHasher`, `TokenService`                                       | `video-api`            | bcrypt, jsonwebtoken                |
+| `MetricsExporter`, `VideoMetrics`                                      | `video-api`            | `prom-client`                       |
+| `FrameExtractor`, `ZipArchiver`                                        | `video-processor`      | ffmpeg/ffprobe, archiver            |
+| `WorkspaceFactory`                                                     | `video-processor`      | diretório temporário por job        |
+| `ProcessingMetrics`                                                    | `video-processor`      | `prom-client`                       |
+| `Mailer`, `NotificationMetrics`                                        | `notification-service` | Nodemailer, `prom-client`           |
+| `ObjectStorage`, `IdempotencyStore`, `ProgressStore`, `EventPublisher` | `packages/shared`      | S3 (S3Mock em dev), Redis, RabbitMQ |
 
 ### SOLID na prática
 
